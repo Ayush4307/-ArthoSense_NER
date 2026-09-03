@@ -178,12 +178,11 @@ with tab1:
                       delta="Overweight" if calc_bmi >= 25 else ("Obese" if calc_bmi >= 30 else "Normal"),
                       delta_color="inverse" if calc_bmi >= 25 else "normal")
 
-        district = st.selectbox(get_text("district", lang), [
-            "Jorhat (Assam - Tea Garden Region)", "Dibrugarh (Assam)", "Kamrup / Guwahati (Assam)",
-            "East Khasi Hills / Shillong (Meghalaya)", "West Garo Hills (Meghalaya)",
-            "Imphal West (Manipur)", "Churachandpur (Manipur)", "Aizawl (Mizoram)",
-            "Kokrajhar (BTR, Assam)", "Kohima (Nagaland)", "Papum Pare (Arunachal Pradesh)"
-        ])
+        district = st.text_input(
+            get_text("district", lang),
+            value=st.session_state.screening_data.get("district", "Jorhat, Assam"),
+            placeholder="e.g. Jorhat, Assam / East Khasi Hills, Meghalaya"
+        )
 
     st.markdown("---")
     st.subheader(get_text("clinical_questions", lang))
