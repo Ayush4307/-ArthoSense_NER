@@ -359,8 +359,8 @@ with tab2:
 
     m_col1, m_col2, m_col3 = st.columns(3)
     m_col1.metric("Knee ROM Flexion Angle", f"{rom_val}°",
-                  delta="Restricted (<110°)" if rom_val < 110 else "Normal (>120°)",
-                  delta_color="inverse" if rom_val < 110 else "normal")
+                  delta="Healthy Functional Squat (≥85°)" if rom_val >= 85 else ("Mild Restriction (65°-84°)" if rom_val >= 65 else "Restricted (<65°)"),
+                  delta_color="normal" if rom_val >= 85 else "inverse")
                   
     m_col2.metric("Trunk Sway Angle", f"{sway_val}°",
                   delta="Elevated Sway (≥10°)" if sway_val >= 10 else "Minimal Lean (<10°)",
