@@ -475,12 +475,16 @@ with tab3:
         hardware_mode = "simulator" if "SIMULATED" in com_option else "physical"
 
     with col_sens2:
-        sensor_cond = st.selectbox(
-            "⚡ Joint Biomechanical Profile",
-            ["moderate", "severe", "mild", "healthy"],
-            index=0,
-            format_func=lambda x: f"{x.capitalize()} Joint Wear & Crepitus"
-        )
+        if hardware_mode == "simulator":
+            sensor_cond = st.selectbox(
+                "⚡ Joint Biomechanical Profile",
+                ["moderate", "severe", "mild", "healthy"],
+                index=0,
+                format_func=lambda x: f"{x.capitalize()} Joint Wear & Crepitus"
+            )
+        else:
+            sensor_cond = "moderate"
+            st.markdown("<br><span style='background-color:#065f46; color:#34d399; padding:8px 14px; border-radius:6px; font-weight:600;'>🟢 Physical Sensor Active (COM3)</span>", unsafe_allow_html=True)
 
     st.markdown("""
     <div class='step-box'>
