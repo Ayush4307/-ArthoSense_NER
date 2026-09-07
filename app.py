@@ -370,6 +370,31 @@ with tab2:
                   delta="Severe Asymmetry (≥20%)" if asym_val >= 20.0 else ("Mild Asymmetry (10-20%)" if asym_val >= 10.0 else "Symmetrical Movement (<10%)"),
                   delta_color="inverse" if asym_val >= 20.0 else ("off" if asym_val >= 10.0 else "normal"))
 
+    # Display line chart of recorded movement from knee_angles_log.csv below summary
+    log_path = 'knee_angles_log.csv'
+    if os.path.exists(log_path):
+        try:
+            df_log = pd.read_csv(log_path)
+            if not df_log.empty and len(df_log) > 5:
+                st.markdown("---")
+                st.markdown("##### 📈 Recorded 15-Second Movement Waveform Plot (Flexion & Sway Over Time)")
+                
+                chart_df = df_log.copy()
+                if 'Timestamp' in chart_df.columns:
+                    t0 = chart_df['Timestamp'].iloc[0]
+                    chart_df['Time (sec)'] = (chart_df['Timestamp'] - t0).round(1)
+                    chart_df = chart_df.set_index('Time (sec)')
+                
+                plot_data = chart_df.rename(columns={
+                    'Left_Knee_Angle': 'Left Knee Angle (°)',
+                    'Right_Knee_Angle': 'Right Knee Angle (°)',
+                    'Trunk_Sway': 'Trunk Sway (°)'
+                })[['Left Knee Angle (°)', 'Right Knee Angle (°)', 'Trunk Sway (°)']]
+                
+                st.line_chart(plot_data, height=280)
+        except Exception as err:
+            print(f"Error rendering log chart: {err}")
+
 # ==============================================================================
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
 # ==============================================================================
