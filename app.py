@@ -270,6 +270,28 @@ def load_latest_cv_log():
             print(f"Error reading CSV log: {e}")
     return False
 
+# Helper to load mock_imu_data.csv into session state
+def load_latest_sensor_log():
+    log_path = 'mock_imu_data.csv'
+    if os.path.exists(log_path):
+        try:
+            df = pd.read_csv(log_path)
+            if not df.empty and len(df) > 5:
+                v_rms = df['Vibration_RMS'].mean()
+                accel_impact = df['Accel_Impact'].max() if 'Accel_Impact' in df.columns else 1.18
+                gyro_speed = df['Gyro_Speed'].mean() if 'Gyro_Speed' in df.columns else 45.0
+                
+                asym_sensor = min(25.0, round(float(df['Vibration_RMS'].std() * 100.0), 1)) if 'Vibration_RMS' in df.columns else 6.2
+                
+                st.session_state.screening_data["vibration_rms"] = round(float(v_rms), 3)
+                st.session_state.screening_data["accel_impact"] = round(float(accel_impact), 2)
+                st.session_state.screening_data["gyro_speed"] = round(float(gyro_speed), 1)
+                st.session_state.screening_data["sensor_asymmetry"] = round(float(asym_sensor), 1)
+                return True
+        except Exception as e:
+            print(f"Error reading sensor CSV log: {e}")
+    return False
+
 # ==============================================================================
 # TAB 1: PATIENT INTAKE & EPIDEMIOLOGICAL QUESTIONNAIRE (DYNAMIC BMI GAUGE)
 # ==============================================================================
@@ -437,43 +459,104 @@ with tab2:
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
 # ==============================================================================
 with tab3:
-    st.subheader("📡 Multimodal Perception: Wearable Sensor Stack (IMU + Acoustic Piezo)")
+    st.subheader("📡 Multimodal Perception: Wearable Sensor Stack (IMU + Piezo Stethoscope)")
     
+    col_sens1, col_sens2 = st.columns([2, 1])
+    with col_sens1:
+        com_option = st.radio(
+            "🔌 Select Sensor Hardware Port",
+            [
+                "SIMULATED: Calibrated Wearable Hardware Simulator",
+                "PHYSICAL: COM3 Physical MPU6050 + Piezo Stethoscope"
+            ],
+            index=0,
+            horizontal=True
+        )
+        hardware_mode = "simulator" if "SIMULATED" in com_option else "physical"
+
+    with col_sens2:
+        sensor_cond = st.selectbox(
+            "⚡ Joint Biomechanical Profile",
+            ["moderate", "severe", "mild", "healthy"],
+            index=0,
+            format_func=lambda x: f"{x.capitalize()} Joint Wear & Crepitus"
+        )
+
     st.markdown("""
-    > **Acoustic & Acceleration Sensing**: Micro-vibration contact stethoscope (Piezo mic) and MPU6050 6-DOF IMU 
-    > detect joint friction crepitus sounds (clicks/grinding) and micro-tremors during joint movement.
-    """)
+    <div class='step-box'>
+        <h4>📋 Instructions for Wearable Sensor Screening Workflow:</h4>
+        <ol>
+            <li>Click <strong><code>📡 OPEN SENSOR MONITOR & RECORDING</code></strong> below.</li>
+            <li>The telemetry window will launch in <strong>Standby Alignment Mode</strong>. Ensure IMU & Acoustic Piezo straps are snugly fitted around the knee joint.</li>
+            <li>When ready, press the <strong><code>R</code></strong> key on your keyboard to start recording 15 seconds of sensor data.</li>
+            <li>Perform knee flexion squats. The recorder will <strong>AUTOMATICALLY CLOSE</strong> when 15 seconds are complete!</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
-    sensor_cond = st.selectbox("Select Joint Biomechanical Profile", ["moderate", "severe", "mild", "healthy"], index=0,
-                               format_func=lambda x: f"{x.capitalize()} Joint Wear & Acoustic Profile")
-    
-    stream_mgr = SensorStreamManager(mode="simulator")
-    sample = stream_mgr.read_sample(joint_condition=sensor_cond)
-    
-    st.session_state.screening_data["vibration_rms"] = sample["vibration_rms"]
-    st.session_state.screening_data["dominant_freq"] = sample["dominant_freq_hz"]
+    col_btn1, col_btn2 = st.columns([2, 1])
+    with col_btn1:
+        if st.button("📡 OPEN SENSOR MONITOR & RECORDING", type="primary", use_container_width=True):
+            recorder_script = os.path.join(os.path.dirname(__file__), "sensor_recorder.py")
+            subprocess.Popen(["python", recorder_script, sensor_cond])
+            st.success("Sensor Monitor Opened! Ensure sensor straps are fitted, then press 'R' key to record data. Window closes automatically when 15s complete.")
+    with col_btn2:
+        if st.button("🔄 Import Recorded Sensor Data", type="secondary", use_container_width=True):
+            if load_latest_sensor_log():
+                st.success("✅ Recorded wearable sensor data successfully imported!")
+            else:
+                st.warning("No recent 15-second sensor recording found in log. Please run recording first.")
 
-    s_col1, s_col2 = st.columns(2)
-    s_col1.metric("Vibration RMS (Piezo Contact)", f"{sample['vibration_rms']}", delta="High Crepitus" if sample['vibration_rms'] > 0.4 else "Smooth Profile")
-    s_col2.metric("Dominant Frequency Peak", f"{sample['dominant_freq_hz']} Hz")
+    st.markdown("---")
+    st.markdown("##### 📊 Saved Wearable Sensor Summary for AI Diagnosis")
 
-    t_arr = np.linspace(0, 1, 100)
-    if sensor_cond == "severe":
-        wave = np.sin(2 * np.pi * 12 * t_arr) * 0.8 + np.random.normal(0, 0.25, 100)
-    elif sensor_cond == "moderate":
-        wave = np.sin(2 * np.pi * 8 * t_arr) * 0.5 + np.random.normal(0, 0.15, 100)
-    elif sensor_cond == "mild":
-        wave = np.sin(2 * np.pi * 5 * t_arr) * 0.3 + np.random.normal(0, 0.08, 100)
-    else:
-        wave = np.sin(2 * np.pi * 3 * t_arr) * 0.1 + np.random.normal(0, 0.03, 100)
-        
-    st.markdown("##### Real-Time Acoustic Crepitus Waveform (mV)")
-    st.line_chart(pd.DataFrame({"Piezo Acoustic Signal": wave}), height=220)
-    
-    if sample["crepitus_detected"]:
-        st.error("⚠️ Acoustic Crepitus Detected: Joint micro-vibration peaks exceed clinical friction threshold.")
-    else:
-        st.success("✅ Acoustic Stream: Joint movement is acoustically smooth.")
+    rms_val = st.session_state.screening_data.get('vibration_rms', 0.68)
+    impact_val = st.session_state.screening_data.get('accel_impact', 1.18)
+    asym_sens = st.session_state.screening_data.get('sensor_asymmetry', 6.2)
+
+    s_mcol1, s_mcol2, s_mcol3 = st.columns(3)
+    s_mcol1.metric("Vibration RMS (Piezo Stethoscope)", f"{rms_val} g",
+                   delta="High Crepitus Friction (≥0.400 g)" if rms_val >= 0.40 else "Smooth Profile (<0.400 g)",
+                   delta_color="inverse" if rms_val >= 0.40 else "normal")
+                  
+    s_mcol2.metric("Peak Impact Acceleration", f"{impact_val} g",
+                   delta="Severe Joint Impact (≥1.50 g)" if impact_val >= 1.50 else "Normal Impact Loading (<1.50 g)",
+                   delta_color="inverse" if impact_val >= 1.50 else "normal")
+
+    s_mcol3.metric("Sensor Inertial Asymmetry", f"{asym_sens}%",
+                   delta="Inertial Asymmetry (≥10%)" if asym_sens >= 10.0 else "Low Inertial Asymmetry (<10%)",
+                   delta_color="inverse" if asym_sens >= 10.0 else "normal")
+
+    # Display line chart of recorded sensor stream from mock_imu_data.csv below summary
+    imu_log_path = 'mock_imu_data.csv'
+    if os.path.exists(imu_log_path):
+        try:
+            df_sensor = pd.read_csv(imu_log_path)
+            if not df_sensor.empty and len(df_sensor) > 5:
+                st.markdown("---")
+                st.markdown("##### 📈 Recorded 15-Second Wearable Sensor Waveform Plot (Acoustic Crepitus & IMU Over Time)")
+                
+                chart_sens = df_sensor.copy()
+                if 'Timestamp' in chart_sens.columns:
+                    t0_s = chart_sens['Timestamp'].iloc[0]
+                    chart_sens['Time (sec)'] = (chart_sens['Timestamp'] - t0_s).round(1)
+                    chart_sens = chart_sens.set_index('Time (sec)')
+                
+                cols_to_plot = {}
+                if 'Acoustic_Signal' in chart_sens.columns:
+                    cols_to_plot['Acoustic_Signal'] = 'Acoustic Crepitus (mV)'
+                if 'Vibration_RMS' in chart_sens.columns and 'Acoustic_Signal' not in cols_to_plot:
+                    cols_to_plot['Vibration_RMS'] = 'Vibration RMS (g)'
+                if 'Accel_Impact' in chart_sens.columns:
+                    cols_to_plot['Accel_Impact'] = 'IMU Accel Impact (g)'
+                if 'Gyro_Speed' in chart_sens.columns:
+                    cols_to_plot['Gyro_Speed'] = 'Gyro Angular Speed (deg/s)'
+
+                if cols_to_plot:
+                    plot_sens_data = chart_sens.rename(columns=cols_to_plot)[list(cols_to_plot.values())]
+                    st.line_chart(plot_sens_data, color=["#f97316", "#3b82f6", "#a855f7"], height=280)
+        except Exception as err:
+            print(f"Error rendering sensor log chart: {err}")
 
     st.markdown("---")
     st.markdown("##### 🔄 Multi-Modal Sensor Fusion Engine (`fuse_data.py`)")
