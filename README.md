@@ -106,3 +106,4 @@ The clinical scoring engine incorporates empirical findings from:
 ## 👥 Smart India Hackathon (SIH) 
 - **Problem Statement:** SIH26004 — AI-Assisted Early Detection System for Knee Osteoarthritis in the North East Region (NER)
 - **Deployment Mode:** 100% Offline Edge Architecture for Rural Primary Health Centres (PHCs) and Village Sub-Centres.
+colab - ayush - niraj
