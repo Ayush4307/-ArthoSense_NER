@@ -11,6 +11,7 @@ import time
 import os
 import cv2
 import subprocess
+import csv
 from datetime import datetime
 
 # Local imports
@@ -91,6 +92,13 @@ st.markdown("""
         border-radius: 8px;
         margin: 10px 0;
     }
+    .step-box {
+        background-color: #f0f4f8;
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -162,6 +170,33 @@ if "screening_data" not in st.session_state:
 
 if "assessment_result" not in st.session_state:
     st.session_state.assessment_result = None
+
+# Helper to load knee_angles_log.csv into session state
+def load_latest_cv_log():
+    log_path = 'knee_angles_log.csv'
+    if os.path.exists(log_path):
+        try:
+            df = pd.read_csv(log_path)
+            if not df.empty and len(df) > 5:
+                l_min = df['Left_Knee_Angle'].min()
+                l_max = df['Left_Knee_Angle'].max()
+                r_min = df['Right_Knee_Angle'].min()
+                r_max = df['Right_Knee_Angle'].max()
+                
+                l_rom = l_max - l_min
+                r_rom = r_max - r_min
+                min_rom = min(l_rom, r_rom) if max(l_rom, r_rom) > 0 else max(l_rom, r_rom)
+                
+                max_sway = df['Trunk_Sway'].max()
+                asym = (abs(l_rom - r_rom) / max(l_rom, r_rom) * 100.0) if max(l_rom, r_rom) > 0 else 0.0
+                
+                st.session_state.screening_data["rom_angle"] = round(float(min_rom), 1)
+                st.session_state.screening_data["trunk_sway"] = round(float(max_sway), 1)
+                st.session_state.screening_data["gait_asymmetry"] = round(float(asym), 1)
+                return True
+        except Exception as e:
+            print(f"Error reading CSV log: {e}")
+    return False
 
 # ==============================================================================
 # TAB 1: PATIENT INTAKE & EPIDEMIOLOGICAL QUESTIONNAIRE
@@ -235,21 +270,15 @@ with tab1:
     st.info("💡 Patient profile updated. Proceed to Tab 2 for Vision Kinematics or Tab 3 for Sensor Analysis.")
 
 # ==============================================================================
-# TAB 2: MULTIMODAL VISION KINEMATICS (CLEAN 15-SECOND WEBCAM RECORDING)
+# TAB 2: MULTIMODAL VISION KINEMATICS (CAMERA ALIGNMENT & 15s RECORDING)
 # ==============================================================================
 with tab2:
-    st.subheader("🎥 Computer Vision Kinematics: 15-Second Video Kinematic Recording")
+    st.subheader("🎥 Computer Vision Kinematics: Real-Time Joint Tracking")
     
-    st.markdown("""
-    Select your camera source (**0** for built-in webcam or **1** for external/phone camera like Iriun or DroidCam), 
-    then click **`🔴 START 15-SECOND KINEMATIC RECORDING`**. The system will open the camera, record video angles for 
-    15 seconds with real-time MediaPipe pose landmarker & dynamic plots, and automatically stop when finished!
-    """)
-
     col_cam1, col_cam2 = st.columns([2, 1])
     with col_cam1:
         cam_option = st.radio(
-            "📹 Select Camera Input Device",
+            "📹 Select Camera Device",
             [
                 "0: Default Built-in Laptop Webcam",
                 "1: External / Phone Camera (Iriun / DroidCam App)"
@@ -260,95 +289,35 @@ with tab2:
         cam_idx = 0 if "0:" in cam_option else 1
 
     with col_cam2:
-        enable_clahe = st.checkbox("💡 CLAHE Low-Light Image Enhancement", value=True, help="Auto-boosts contrast for dark indoor clinic rooms")
+        enable_clahe = st.checkbox("💡 Low-Light Image Enhancement (CLAHE)", value=True, help="Auto-boosts contrast for dark indoor clinic rooms")
 
-    rec_duration = 15 # Fixed 15-second recording
+    st.markdown("""
+    <div class='step-box'>
+        <h4>📋 Instructions for Screening Workflow:</h4>
+        <ol>
+            <li>Click <strong><code>📹 OPEN WEBCAM FOR ALIGNMENT</code></strong> below.</li>
+            <li>The video window will open in <strong>Alignment Mode</strong>. Step back and position the tripod/camera angle so your hips, knees, and ankles are clearly visible.</li>
+            <li>When ready, press the <strong><code>R</code></strong> key on your keyboard to start recording.</li>
+            <li>Perform 15 seconds of knee flexion/squats. The window will <strong>AUTOMATICALLY CLOSE</strong> when 15 seconds are complete!</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if st.button("🔴 START 15-SECOND KINEMATIC RECORDING", type="primary", use_container_width=True):
-        status_box = st.empty()
-        progress_bar = st.progress(0)
-        
-        v_col1, v_col2 = st.columns([1, 1])
-        with v_col1:
-            st.markdown("##### Live Video Feed (MediaPipe Tracking)")
-            video_spot = st.empty()
-        with v_col2:
-            st.markdown("##### Real-Time Knee Flexion & Sway Plot (15s Window)")
-            chart_spot = st.empty()
-            
-        metrics_spot = st.empty()
-        
-        tracker = DualLegKinematicsTracker(graph_length=100, enable_clahe=enable_clahe)
-        cap = cv2.VideoCapture(cam_idx)
-        
-        if not cap.isOpened() and cam_idx != 0:
-            st.warning(f"Camera index {cam_idx} not found. Falling back to default webcam (index 0)...")
-            cap = cv2.VideoCapture(0)
-            
-        if not cap.isOpened():
-            st.error("❌ Error: Could not open camera. Please check USB/Phone connection.")
-        else:
-            start_time = time.time()
-            history_data = []
-            
-            # Prepare log file
-            with open('knee_angles_log.csv', mode='w', newline='') as f:
-                f.write("Timestamp,Left_Knee_Angle,Right_Knee_Angle,Trunk_Sway\n")
-                
-            try:
-                while True:
-                    elapsed = time.time() - start_time
-                    if elapsed >= rec_duration:
-                        break
-                        
-                    remaining = int(np.ceil(rec_duration - elapsed))
-                    progress = min(1.0, elapsed / rec_duration)
-                    
-                    status_box.markdown(f"### 🔴 RECORDING IN PROGRESS: **{remaining} seconds remaining...** (Step back to show legs)")
-                    progress_bar.progress(progress)
-                    
-                    ret, frame = cap.read()
-                    if not ret:
-                        st.error("Camera stream interrupted.")
-                        break
-                        
-                    processed_frame, metrics = tracker.process_frame(frame)
-                    video_spot.image(processed_frame, channels="BGR", use_container_width=True)
-                    
-                    history_data.append({
-                        "Left Knee Angle": metrics["left_angle"],
-                        "Right Knee Angle": metrics["right_angle"],
-                        "Trunk Sway": metrics["trunk_sway"]
-                    })
-                    if len(history_data) > 100:
-                        history_data.pop(0)
-                        
-                    chart_df = pd.DataFrame(history_data)
-                    chart_spot.line_chart(chart_df, height=280)
-                    
-                    with metrics_spot.container():
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Left Knee ROM", f"{metrics['left_rom']}°")
-                        m2.metric("Right Knee ROM", f"{metrics['right_rom']}°")
-                        m3.metric("Trunk Sway Angle", f"{metrics['trunk_sway']}°")
-                        m4.metric("Gait Asymmetry Index", f"{metrics['asymmetry_index']}%", delta=metrics['gait_diagnosis'].split(' ')[0])
-                        
-                    st.session_state.screening_data["rom_angle"] = min(metrics["left_rom"], metrics["right_rom"]) if metrics["left_rom"] > 0 else metrics["right_rom"]
-                    st.session_state.screening_data["trunk_sway"] = metrics["trunk_sway"]
-                    st.session_state.screening_data["gait_asymmetry"] = metrics["asymmetry_index"]
-                    
-                    with open('knee_angles_log.csv', mode='a', newline='') as f:
-                        f.write(f"{time.time()},{metrics['left_angle']},{metrics['right_angle']},{metrics['trunk_sway']}\n")
-                        
-                    time.sleep(0.03)
-            finally:
-                cap.release()
-                
-            status_box.success("✅ 15-SECOND KINEMATIC RECORDING COMPLETE! Angles saved to `knee_angles_log.csv` and locked for AI diagnosis.")
-            progress_bar.progress(1.0)
+    col_btn1, col_btn2 = st.columns([2, 1])
+    with col_btn1:
+        if st.button("📹 OPEN WEBCAM FOR ALIGNMENT & RECORDING", type="primary", use_container_width=True):
+            tracker_script = os.path.join(os.path.dirname(__file__), "oa_tracker.py")
+            subprocess.Popen(["python", tracker_script, str(cam_idx)])
+            st.success("Camera Window Opened! Step back to align body, then press 'R' key to record data. Window closes automatically when 15s complete.")
+    with col_btn2:
+        if st.button("🔄 Import Recorded Kinematics", type="secondary", use_container_width=True):
+            if load_latest_cv_log():
+                st.success("✅ Recorded kinematic data successfully imported!")
+            else:
+                st.warning("No recent 15-second recording found in log. Please run recording first.")
 
     st.markdown("---")
-    st.markdown("##### 📊 Locked Kinematics Summary for Current Screening")
+    st.markdown("##### 📊 Saved Kinematic Summary for AI Diagnosis")
     m_col1, m_col2, m_col3 = st.columns(3)
     m_col1.metric("Knee ROM Flexion Angle", f"{st.session_state.screening_data['rom_angle']}°",
                   delta="Restricted (<110°)" if st.session_state.screening_data['rom_angle'] < 110 else "Normal (>125°)",
@@ -356,14 +325,6 @@ with tab2:
     m_col2.metric("Trunk Sway Angle", f"{st.session_state.screening_data.get('trunk_sway', 4.2)}°")
     m_col3.metric("Gait Asymmetry Index", f"{st.session_state.screening_data.get('gait_asymmetry', 8.5)}%",
                   delta="Compensatory" if st.session_state.screening_data.get('gait_asymmetry', 8.5) >= 5 else "Symmetrical")
-
-    # Optional expander for fallback testing mode
-    with st.expander("🛠️ Advanced / Offline Fallback Testing Options (Simulator & External OpenCV Window)"):
-        st.markdown("If testing without any physical webcam, you can run the built-in simulator or standalone tracker:")
-        if st.button("🚀 Launch Standalone OpenCV High-FPS Window (`oa_tracker.py`)"):
-            tracker_script = os.path.join(os.path.dirname(__file__), "oa_tracker.py")
-            subprocess.Popen(["python", tracker_script, str(cam_idx)])
-            st.success("OpenCV Window Launched! Press 'q' inside video window to stop.")
 
 # ==============================================================================
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
