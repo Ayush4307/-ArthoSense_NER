@@ -7,7 +7,7 @@ via Serial (pyserial) and provides a calibrated interactive hardware simulator.
 import time
 import math
 import numpy as np
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 try:
     import serial
@@ -25,6 +25,21 @@ def list_available_com_ports() -> List[str]:
     if not port_list:
         return ["No physical COM ports found (Use Simulator)"]
     return port_list
+
+def get_connected_hardware_info() -> Tuple[bool, str, List[str]]:
+    """
+    Scans system COM ports and returns:
+    (is_connected, status_message, list_of_port_descriptions)
+    """
+    if not SERIAL_AVAILABLE:
+        return False, "⚠️ PySerial module missing. Using Calibrated Field Simulator.", []
+    ports = serial.tools.list_ports.comports()
+    if not ports:
+        return False, "⚠️ No Physical Hardware / Joint Band Detected! Please connect the USB Wearable Hardware Joint Band or switch to Calibrated Simulator Mode.", []
+    
+    port_descs = [f"{p.device} - {p.description}" for p in ports]
+    primary_device = port_descs[0]
+    return True, f"🟢 Connected Physical Device: {primary_device}", port_descs
 
 class SensorStreamManager:
     """

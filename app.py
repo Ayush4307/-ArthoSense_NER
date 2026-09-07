@@ -27,7 +27,7 @@ from vision_kinematics import (
     MEDIAPIPE_AVAILABLE
 )
 from fuse_data import fuse_sensor_data
-from sensor_stream import SensorStreamManager, list_available_com_ports
+from sensor_stream import SensorStreamManager, list_available_com_ports, get_connected_hardware_info
 from report_generator import generate_pdf_report, generate_html_report
 
 # Initialize SQLite database on startup
@@ -484,7 +484,19 @@ with tab3:
             )
         else:
             sensor_cond = "moderate"
-            st.markdown("<br><span style='background-color:#065f46; color:#34d399; padding:8px 14px; border-radius:6px; font-weight:600;'>🟢 Physical Sensor Active (COM3)</span>", unsafe_allow_html=True)
+            is_hw_connected, hw_msg, hw_ports = get_connected_hardware_info()
+            if is_hw_connected:
+                dev_name = hw_ports[0] if hw_ports else "Physical Sensor"
+                st.markdown(f"<br><span style='background-color:#065f46; color:#34d399; padding:8px 14px; border-radius:6px; font-weight:600;'>🟢 Connected: {dev_name}</span>", unsafe_allow_html=True)
+            else:
+                st.markdown("<br><span style='background-color:#7f1d1d; color:#fca5a5; padding:8px 14px; border-radius:6px; font-weight:600;'>🔴 Hardware Disconnected</span>", unsafe_allow_html=True)
+
+    if hardware_mode == "physical":
+        is_hw_connected, hw_msg, hw_ports = get_connected_hardware_info()
+        if not is_hw_connected:
+            st.error("⚠️ **No Physical Hardware / Joint Band Detected!** Please connect the Wearable Hardware Joint Band (MPU6050 + Piezo Stethoscope) to your laptop USB port, or select `SIMULATED` mode above.")
+        else:
+            st.success(f"✅ **Hardware Joint Band Online:** {hw_msg}")
 
     st.markdown("""
     <div class='step-box'>
