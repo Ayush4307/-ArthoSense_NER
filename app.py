@@ -363,12 +363,12 @@ with tab2:
                   delta_color="normal" if rom_val >= 85 else "inverse")
                   
     m_col2.metric("Trunk Sway Angle", f"{sway_val}°",
-                  delta="Elevated Sway (≥10°)" if sway_val >= 10 else "Minimal Lean (<10°)",
-                  delta_color="inverse" if sway_val >= 10 else "normal")
+                  delta="Forward Torso Lean (≥20°)" if sway_val >= 20.0 else "Normal Squat Posture (<20°)",
+                  delta_color="inverse" if sway_val >= 20.0 else "normal")
 
     m_col3.metric("Gait Asymmetry Index", f"{asym_val}%",
-                  delta="Severe Antalgic (≥15%)" if asym_val >= 15 else ("Compensatory (5-15%)" if asym_val >= 5 else "Symmetrical (<5%)"),
-                  delta_color="inverse" if asym_val >= 5 else "normal")
+                  delta="Severe Asymmetry (≥20%)" if asym_val >= 20.0 else ("Mild Asymmetry (10-20%)" if asym_val >= 10.0 else "Symmetrical Movement (<10%)"),
+                  delta_color="inverse" if asym_val >= 20.0 else ("off" if asym_val >= 10.0 else "normal"))
 
 # ==============================================================================
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
