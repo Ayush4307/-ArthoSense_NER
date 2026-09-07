@@ -261,7 +261,7 @@ with tab1:
         with c7:
             gauge_path = os.path.join(os.path.dirname(__file__), "bmi_gauge.png")
             if os.path.exists(gauge_path):
-                st.image(gauge_path, caption="BMI Reference Chart", width=220)
+                st.image(gauge_path, caption="AI Medical BMI Reference Gauge", width=260)
 
         district = st.text_input(
             get_text("district", lang),
