@@ -391,7 +391,7 @@ with tab2:
                     'Trunk_Sway': 'Trunk Sway (°)'
                 })[['Left Knee Angle (°)', 'Right Knee Angle (°)', 'Trunk Sway (°)']]
                 
-                st.line_chart(plot_data, height=280)
+                st.line_chart(plot_data, color=["#22c55e", "#3b82f6", "#a855f7"], height=280)
         except Exception as err:
             print(f"Error rendering log chart: {err}")
 
