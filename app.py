@@ -498,8 +498,8 @@ with tab3:
     with col_btn1:
         if st.button("📡 OPEN SENSOR MONITOR & RECORDING", type="primary", use_container_width=True):
             recorder_script = os.path.join(os.path.dirname(__file__), "sensor_recorder.py")
-            subprocess.Popen(["python", recorder_script, sensor_cond])
-            st.success("Sensor Monitor Opened! Ensure sensor straps are fitted, then press 'R' key to record data. Window closes automatically when 15s complete.")
+            subprocess.Popen(["python", recorder_script, sensor_cond, hardware_mode])
+            st.success(f"Sensor Monitor Opened in {'Physical Serial Hardware' if hardware_mode=='physical' else 'Calibrated Simulator'} mode! Press 'R' key to record. Auto-closes when done.")
     with col_btn2:
         if st.button("🔄 Import Recorded Sensor Data", type="secondary", use_container_width=True):
             if load_latest_sensor_log():

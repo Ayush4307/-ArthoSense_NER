@@ -1,7 +1,7 @@
 """
 ArthoSense NER - Wearable Sensor Recorder (GUI Launcher)
 2-Phase Standby & Recording Mode for MPU6050 IMU + Piezo Acoustic Contact Stethoscope.
-Runs offline, displays real-time telemetry, records 15 seconds on 'R' key, and auto-closes.
+Handles both physical USB Serial hardware (COM ports) and Calibrated Field Simulator.
 """
 
 import cv2
@@ -11,13 +11,37 @@ import csv
 import os
 import sys
 import math
-from sensor_stream import SensorStreamManager
+from sensor_stream import SensorStreamManager, list_available_com_ports
 
-def run_sensor_recorder(condition="moderate", duration=15.0):
-    joint_condition = condition if len(sys.argv) <= 1 else sys.argv[1]
-    
-    stream_mgr = SensorStreamManager(mode="simulator")
-    
+def run_sensor_recorder():
+    joint_condition = sys.argv[1] if len(sys.argv) > 1 else "moderate"
+    hardware_mode = sys.argv[2] if len(sys.argv) > 2 else "simulator"
+    requested_port = sys.argv[3] if len(sys.argv) > 3 else "AUTO"
+
+    stream_mgr = None
+    data_source_label = "Calibrated Field Simulator"
+    is_physical = False
+
+    if hardware_mode == "physical":
+        ports = list_available_com_ports()
+        real_ports = [p for p in ports if "SIMULATED" not in p and "No physical" not in p]
+        target_port = requested_port if requested_port in real_ports else (real_ports[0] if real_ports else None)
+        
+        if target_port:
+            stream_mgr = SensorStreamManager(mode="physical", port=target_port)
+            if stream_mgr.connect_serial():
+                is_physical = True
+                data_source_label = f"Physical Hardware ({target_port} @ 115200)"
+            else:
+                data_source_label = "Simulator (COM Port Unreachable)"
+        else:
+            data_source_label = "Simulator (No USB COM Hardware Found)"
+
+    if not stream_mgr:
+        stream_mgr = SensorStreamManager(mode="simulator")
+        if hardware_mode != "physical":
+            data_source_label = "Calibrated Field Simulator"
+
     # Canvas setup
     win_w, win_h = 750, 480
     bg_color = (15, 23, 42) # Slate dark #0f172a
@@ -37,6 +61,7 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
     print("==================================================")
     print(" ARTHOSENSE WEARABLE SENSOR RECORDER LAUNCHED")
     print("==================================================")
+    print(f"Data Source       : {data_source_label}")
     print(f"Condition Profile : {joint_condition}")
     print("Instructions      : Standby Mode active.")
     print("                  : Press 'R' key to start 15-second sensor recording.")
@@ -67,9 +92,8 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
         
         if recording:
             elapsed = current_time - start_time
-            remaining = max(0.0, duration - elapsed)
+            remaining = max(0.0, duration if 'duration' in locals() else 15.0 - elapsed)
             
-            # Save sample row
             recorded_rows.append({
                 "Timestamp": current_time,
                 "Vibration_RMS": rms,
@@ -78,8 +102,7 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
                 "Acoustic_Signal": round(piezo_raw, 3)
             })
             
-            if elapsed >= duration:
-                # Save CSV and exit
+            if elapsed >= 15.0:
                 try:
                     with open(csv_file, mode="w", newline="") as f:
                         writer = csv.DictWriter(f, fieldnames=["Timestamp", "Vibration_RMS", "Accel_Impact", "Gyro_Speed", "Acoustic_Signal"])
@@ -92,15 +115,19 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
 
         # Render Header
         cv2.rectangle(canvas, (0, 0), (win_w, 60), (30, 41, 59), -1)
-        cv2.putText(canvas, "ArthoSense NER - Wearable Sensor Telemetry", (20, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(canvas, "ArthoSense NER - Wearable Sensor Telemetry", (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
+        # Source Sub-label
+        src_color = (34, 197, 94) if is_physical else (234, 179, 8) # Green if physical, Yellow if simulator
+        cv2.putText(canvas, f"Source: {data_source_label}", (20, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, src_color, 1)
+
         # Render Status Badge
         if not recording:
             cv2.rectangle(canvas, (win_w - 280, 15), (win_w - 20, 45), (16, 185, 129), -1) # Green
             cv2.putText(canvas, "STANDBY: PRESS 'R' TO RECORD", (win_w - 272, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
         else:
             elapsed = current_time - start_time
-            remaining = max(0.0, duration - elapsed)
+            remaining = max(0.0, 15.0 - elapsed)
             cv2.rectangle(canvas, (win_w - 280, 15), (win_w - 20, 45), (239, 68, 68), -1) # Red
             cv2.putText(canvas, f"RECORDING: {remaining:.1f}s REMAINING", (win_w - 272, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 2, cv2.LINE_AA)
 
@@ -142,15 +169,12 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
             for i in range(len(piezo_buffer)):
                 px = graph_x + 15 + int((i / max_buf) * (graph_w - 30))
                 
-                # Piezo y
                 py = graph_y + graph_h - 20 - int(min(1.0, piezo_buffer[i]) * (graph_h - 50))
                 p_pts.append((px, py))
                 
-                # Accel y
                 ay = graph_y + graph_h - 20 - int(min(2.0, accel_buffer[i]) / 2.0 * (graph_h - 50))
                 a_pts.append((px, ay))
 
-                # Gyro y
                 gy = graph_y + graph_h - 20 - int(min(120.0, gyro_buffer[i]) / 120.0 * (graph_h - 50))
                 g_pts.append((px, gy))
 
@@ -178,6 +202,8 @@ def run_sensor_recorder(condition="moderate", duration=15.0):
             print("User exited sensor recorder.")
             break
 
+    if stream_mgr:
+        stream_mgr.close()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
