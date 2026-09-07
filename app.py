@@ -12,6 +12,7 @@ import os
 import cv2
 import subprocess
 import csv
+import plotly.graph_objects as go
 from datetime import datetime
 
 # Local imports
@@ -39,6 +40,43 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Dynamic Plotly Speedometer Gauge for BMI
+def render_dynamic_bmi_gauge(bmi_val: float):
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = bmi_val,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Dynamic BMI Gauge Meter", 'font': {'size': 14, 'color': '#38bdf8'}},
+        number = {'suffix': " kg/m²", 'font': {'size': 18, 'color': '#f8fafc'}},
+        gauge = {
+            'axis': {'range': [10, 40], 'tickwidth': 1, 'tickcolor': "#94a3b8"},
+            'bar': {'color': "#38bdf8", 'width': 4},
+            'bgcolor': "rgba(0,0,0,0)",
+            'borderwidth': 1,
+            'bordercolor': "#334155",
+            'steps': [
+                {'range': [10, 18.5], 'color': '#3b82f6'},   # Underweight (Blue)
+                {'range': [18.5, 25.0], 'color': '#22c55e'}, # Normal Weight (Green)
+                {'range': [25.0, 30.0], 'color': '#eab308'}, # Overweight (Yellow)
+                {'range': [30.0, 35.0], 'color': '#f97316'}, # Obese (Orange)
+                {'range': [35.0, 40.0], 'color': '#ef4444'}  # Extremely Obese (Red)
+            ],
+            'threshold': {
+                'line': {'color': "#ffffff", 'width': 4},
+                'thickness': 0.8,
+                'value': bmi_val
+            }
+        }
+    ))
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font={'color': "#f8fafc"},
+        margin=dict(l=10, r=10, t=30, b=10),
+        height=180
+    )
+    return fig
 
 # Custom CSS styling for high-contrast dark medical dashboard
 st.markdown("""
@@ -233,7 +271,7 @@ def load_latest_cv_log():
     return False
 
 # ==============================================================================
-# TAB 1: PATIENT INTAKE & EPIDEMIOLOGICAL QUESTIONNAIRE
+# TAB 1: PATIENT INTAKE & EPIDEMIOLOGICAL QUESTIONNAIRE (DYNAMIC BMI GAUGE)
 # ==============================================================================
 with tab1:
     st.subheader(get_text("patient_demographics", lang))
@@ -248,7 +286,7 @@ with tab1:
             gender_opts = ["Female", "Male", "Other"]
             gender = st.selectbox(get_text("patient_gender", lang), gender_opts, index=0 if st.session_state.screening_data["gender"]=="Female" else 1)
 
-        c4, c5, c6, c7 = st.columns([1, 1, 1, 1.2])
+        c4, c5, c6, c7 = st.columns([1, 1, 1, 1.5])
         with c4:
             height_cm = st.number_input(get_text("height_cm", lang), min_value=100.0, max_value=230.0, value=float(st.session_state.screening_data["height_cm"]), step=0.5)
         with c5:
@@ -259,9 +297,8 @@ with tab1:
                       delta="Overweight" if calc_bmi >= 25 else ("Obese" if calc_bmi >= 30 else "Normal"),
                       delta_color="inverse" if calc_bmi >= 25 else "normal")
         with c7:
-            gauge_path = os.path.join(os.path.dirname(__file__), "bmi_gauge.png")
-            if os.path.exists(gauge_path):
-                st.image(gauge_path, caption="AI Medical BMI Reference Gauge", width=260)
+            fig_gauge = render_dynamic_bmi_gauge(calc_bmi)
+            st.plotly_chart(fig_gauge, use_container_width=True)
 
         district = st.text_input(
             get_text("district", lang),
