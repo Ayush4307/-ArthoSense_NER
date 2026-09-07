@@ -3,7 +3,7 @@ import os
 
 def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='mock_imu_data.csv', output_csv='master_patient_data.csv'):
     print("\n" + "="*50)
-    print(" 🔄 SENSOR FUSION ENGINE STARTING")
+    print(" SENSOR FUSION ENGINE STARTING")
     print("="*50)
     print(f"Loading Camera Data : {camera_csv}")
     print(f"Loading IMU Data    : {imu_csv}...")
@@ -13,7 +13,7 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='mock_imu_data.cs
         cam_df = pd.read_csv(camera_csv)
         imu_df = pd.read_csv(imu_csv)
     except FileNotFoundError as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nError: {e}")
         print("Make sure both CSV files are generated and in the same folder!")
         return None
 
@@ -21,8 +21,7 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='mock_imu_data.cs
     cam_df = cam_df.sort_values('Timestamp')
     imu_df = imu_df.sort_values('Timestamp')
 
-    # 3. The Synchronization Engine
-    # merge_asof matches camera frames with nearest IMU readings within tolerance window
+    # 3. Synchronization Engine
     print("Synchronizing timestamps across modalities...")
     merged_df = pd.merge_asof(
         cam_df, 
@@ -32,16 +31,16 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='mock_imu_data.cs
         tolerance=0.1 # Maximum allowable time difference is 100 milliseconds
     )
 
-    # 4. Clean the data
+    # 4. Clean data
     initial_length = len(merged_df)
     merged_df = merged_df.dropna()
     dropped_rows = initial_length - len(merged_df)
 
-    # 5. Save the final synced Master Patient Data
+    # 5. Save final synced Master Patient Data
     merged_df.to_csv(output_csv, index=False)
     
     print("\n" + "="*50)
-    print(" ✅ DATA FUSION SUCCESSFUL")
+    print(" DATA FUSION SUCCESSFUL")
     print("="*50)
     print(f"Master File Saved as : {output_csv}")
     print(f"Total synced frames  : {len(merged_df)}")

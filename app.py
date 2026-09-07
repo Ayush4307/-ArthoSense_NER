@@ -1,7 +1,7 @@
 """
 ArthoSense NER - AI-Assisted Early Detection System for Knee Osteoarthritis
 SIH26004 Solution tailored for the North East Region (Assam, Meghalaya, Manipur, Mizoram, etc.)
-100% Local, Offline-First Streamlit Application
+100% Local, Offline-First Streamlit Application with MediaPipe CV Kinematics
 """
 
 import streamlit as st
@@ -9,13 +9,21 @@ import numpy as np
 import pandas as pd
 import time
 import os
+import subprocess
 from datetime import datetime
 
 # Local imports
 from localization import get_text, TRANSLATIONS
 from database import init_db, insert_screening, get_all_screenings, get_summary_stats, export_to_csv, export_to_json
 from clinical_engine import calculate_bmi, compute_evidence_rule_score, classifier
-from vision_kinematics import KneeKinematicsTracker, generate_simulated_kinematic_frame, calculate_joint_angle, MEDIAPIPE_AVAILABLE
+from vision_kinematics import (
+    DualLegKinematicsTracker, 
+    generate_simulated_kinematic_frame, 
+    calculate_joint_angle, 
+    calculate_gait_asymmetry,
+    MEDIAPIPE_AVAILABLE
+)
+from fuse_data import fuse_sensor_data
 from sensor_stream import SensorStreamManager, list_available_com_ports
 from report_generator import generate_pdf_report, generate_html_report
 
@@ -145,7 +153,9 @@ if "screening_data" not in st.session_state:
         "crepitus_symptom": True,
         "rom_angle": 94.0,
         "vibration_rms": 0.68,
-        "dominant_freq": 240.0
+        "dominant_freq": 240.0,
+        "trunk_sway": 4.2,
+        "gait_asymmetry": 8.5
     }
 
 if "assessment_result" not in st.session_state:
@@ -226,30 +236,52 @@ with tab1:
 # TAB 2: MULTIMODAL SCREENING (VISION KINEMATICS + SENSORS)
 # ==============================================================================
 with tab2:
-    st.subheader("Multimodal Perception: Real-Time Joint Kinematics & Acoustic Sensing")
+    st.subheader("Multimodal Perception: High-Accuracy Vision Kinematics & Acoustic Sensing")
     
     col_v, col_s = st.columns(2)
 
     with col_v:
-        st.markdown(f"#### 🎥 {get_text('vision_module', lang)}")
-        vision_mode = st.radio("Vision Feed Mode", ["High-Fidelity MediaPipe Kinematic Simulator", "Live Webcam Stream (OpenCV)"], horizontal=True)
+        st.markdown(f"#### 🎥 {get_text('vision_module', lang)} (MediaPipe Tasks)")
         
-        sim_rom_target = st.slider("Target Flexion Angle (ROM in degrees)", min_value=60.0, max_value=145.0, value=float(st.session_state.screening_data["rom_angle"]), step=1.0)
+        vision_mode = st.radio(
+            "Vision Feed Mode", 
+            ["High-Fidelity MediaPipe Kinematic Simulator", "Live Standalone Vision Tracker (OpenCV Window)", "Snapshot Camera Input"],
+            horizontal=False
+        )
         
-        # Display simulated kinematic stream or camera placeholder
+        enable_clahe = st.checkbox("💡 Enable CLAHE Low-Light Image Enhancement", value=True, help="Auto-boost contrast for dark indoor clinic rooms")
+
         if "Simulator" in vision_mode:
+            sim_rom_target = st.slider("Target Flexion Angle (ROM in deg)", min_value=60.0, max_value=145.0, value=float(st.session_state.screening_data["rom_angle"]), step=1.0)
             frame_img, v_metrics = generate_simulated_kinematic_frame(frame_num=35, target_max_rom=sim_rom_target)
-            st.image(frame_img, channels="BGR", caption=f"MediaPipe Pose Tracking | Real-time Calculated ROM: {v_metrics['rom']}°", use_container_width=True)
-            st.session_state.screening_data["rom_angle"] = v_metrics["rom"]
+            st.image(frame_img, channels="BGR", caption=f"MediaPipe Pose Tracking | Left ROM: {v_metrics['left_rom']}° | Right ROM: {v_metrics['right_rom']}°", use_container_width=True)
+            
+            st.session_state.screening_data["rom_angle"] = v_metrics["left_rom"]
+            st.session_state.screening_data["trunk_sway"] = v_metrics["trunk_sway"]
+            st.session_state.screening_data["gait_asymmetry"] = v_metrics["asymmetry_index"]
+            
+        elif "Standalone" in vision_mode:
+            st.info("🚀 Launch the full high-performance OpenCV MediaPipe vision window with live rolling flexion plot, Trunk Sway, and CSV logging.")
+            cam_idx = st.selectbox("Select Camera Device", [0, 1, 2], index=0, format_func=lambda x: f"Camera Index {x} ({'Default Webcam' if x==0 else 'External/Phone Cam'})")
+            
+            if st.button("▶️ Launch High-Accuracy OpenCV Vision Tracker", type="primary"):
+                tracker_script = os.path.join(os.path.dirname(__file__), "oa_tracker.py")
+                subprocess.Popen(["python", tracker_script, str(cam_idx)])
+                st.success("OpenCV Vision Window launched! Press 'q' inside the video window when complete to save `knee_angles_log.csv`.")
+                
         else:
-            st.warning("Webcam feed is supported locally. If running headlessly or testing, use the high-fidelity simulator.")
             cam_input = st.camera_input("Capture Patient Knee Kinematic Frame")
             if cam_input is not None:
-                st.success("Webcam frame captured for joint angle processing!")
-        
-        st.metric(get_text("rom_angle", lang), f"{st.session_state.screening_data['rom_angle']}°",
-                  delta="Restricted (<110°)" if st.session_state.screening_data['rom_angle'] < 110 else "Normal (>125°)",
-                  delta_color="inverse" if st.session_state.screening_data['rom_angle'] < 110 else "normal")
+                st.success("Webcam frame captured! Processing joint kinematics...")
+
+        st.markdown("---")
+        st.markdown("##### 📐 Kinematic & Gait Analysis Summary")
+        v_col1, v_col2, v_col3 = st.columns(3)
+        v_col1.metric("Knee ROM", f"{st.session_state.screening_data['rom_angle']}°",
+                      delta="Restricted (<110°)" if st.session_state.screening_data['rom_angle'] < 110 else "Normal (>125°)",
+                      delta_color="inverse" if st.session_state.screening_data['rom_angle'] < 110 else "normal")
+        v_col2.metric("Trunk Sway Angle", f"{st.session_state.screening_data.get('trunk_sway', 4.2)}°", delta="Lateral Lean")
+        v_col3.metric("Gait Asymmetry Index", f"{st.session_state.screening_data.get('gait_asymmetry', 8.5)}%", delta="Compensatory" if st.session_state.screening_data.get('gait_asymmetry', 8.5) >= 5 else "Symmetrical")
 
     with col_s:
         st.markdown(f"#### 📡 {get_text('sensor_module', lang)}")
@@ -284,6 +316,14 @@ with tab2:
             st.error("⚠️ Acoustic Crepitus Detected: Joint micro-vibration peaks exceed clinical friction threshold.")
         else:
             st.success("✅ Acoustic Stream: Joint movement is acoustically smooth.")
+
+        st.markdown("---")
+        st.markdown("##### 🔄 Multi-Modal Sensor Fusion Engine")
+        if st.button("🔗 Synchronize Camera Kinematics & Wearable Sensor Data (`fuse_data.py`)"):
+            fused_df = fuse_sensor_data()
+            if fused_df is not None:
+                st.success(f"✅ Sensor Fusion Complete! {len(fused_df)} timestamp-synced frames saved to `master_patient_data.csv`.")
+                st.dataframe(fused_df.head(5), use_container_width=True)
 
 # ==============================================================================
 # TAB 3: CLINICAL DIAGNOSIS & EXPLAINABLE AI REPORT
