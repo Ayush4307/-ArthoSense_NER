@@ -352,13 +352,23 @@ with tab2:
 
     st.markdown("---")
     st.markdown("##### 📊 Saved Kinematic Summary for AI Diagnosis")
+    
+    rom_val = st.session_state.screening_data['rom_angle']
+    sway_val = st.session_state.screening_data.get('trunk_sway', 4.2)
+    asym_val = st.session_state.screening_data.get('gait_asymmetry', 8.5)
+
     m_col1, m_col2, m_col3 = st.columns(3)
-    m_col1.metric("Knee ROM Flexion Angle", f"{st.session_state.screening_data['rom_angle']}°",
-                  delta="Restricted (<110°)" if st.session_state.screening_data['rom_angle'] < 110 else "Normal (>125°)",
-                  delta_color="inverse" if st.session_state.screening_data['rom_angle'] < 110 else "normal")
-    m_col2.metric("Trunk Sway Angle", f"{st.session_state.screening_data.get('trunk_sway', 4.2)}°")
-    m_col3.metric("Gait Asymmetry Index", f"{st.session_state.screening_data.get('gait_asymmetry', 8.5)}%",
-                  delta="Compensatory" if st.session_state.screening_data.get('gait_asymmetry', 8.5) >= 5 else "Symmetrical")
+    m_col1.metric("Knee ROM Flexion Angle", f"{rom_val}°",
+                  delta="Restricted (<110°)" if rom_val < 110 else "Normal (>120°)",
+                  delta_color="inverse" if rom_val < 110 else "normal")
+                  
+    m_col2.metric("Trunk Sway Angle", f"{sway_val}°",
+                  delta="Elevated Sway (≥10°)" if sway_val >= 10 else "Minimal Lean (<10°)",
+                  delta_color="inverse" if sway_val >= 10 else "normal")
+
+    m_col3.metric("Gait Asymmetry Index", f"{asym_val}%",
+                  delta="Severe Antalgic (≥15%)" if asym_val >= 15 else ("Compensatory (5-15%)" if asym_val >= 5 else "Symmetrical (<5%)"),
+                  delta_color="inverse" if asym_val >= 5 else "normal")
 
 # ==============================================================================
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
