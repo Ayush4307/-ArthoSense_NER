@@ -286,7 +286,7 @@ with tab1:
             gender_opts = ["Female", "Male", "Other"]
             gender = st.selectbox(get_text("patient_gender", lang), gender_opts, index=0 if st.session_state.screening_data["gender"]=="Female" else 1)
 
-        c4, c5, c6, c7 = st.columns([1, 1, 1, 1.5])
+        c4, c5, c6 = st.columns(3)
         with c4:
             height_cm = st.number_input(get_text("height_cm", lang), min_value=100.0, max_value=230.0, value=float(st.session_state.screening_data["height_cm"]), step=0.5)
         with c5:
@@ -296,9 +296,6 @@ with tab1:
             st.metric(get_text("bmi_calc", lang), f"{calc_bmi} kg/m²", 
                       delta="Overweight" if calc_bmi >= 25 else ("Obese" if calc_bmi >= 30 else "Normal"),
                       delta_color="inverse" if calc_bmi >= 25 else "normal")
-        with c7:
-            fig_gauge = render_dynamic_bmi_gauge(calc_bmi)
-            st.plotly_chart(fig_gauge, use_container_width=True)
 
         district = st.text_input(
             get_text("district", lang),
