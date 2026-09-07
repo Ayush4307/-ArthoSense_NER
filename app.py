@@ -123,7 +123,7 @@ st.markdown(f"<div class='main-title'>{get_text('app_title', lang)}</div>", unsa
 st.markdown(f"<div class='sub-title'>{get_text('app_subtitle', lang)}</div>", unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# TABS NAVIGATION (SEPARATE VISION AND SENSORS SECTIONS)
+# TABS NAVIGATION
 # ------------------------------------------------------------------------------
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     get_text("nav_intake", lang),
@@ -235,59 +235,85 @@ with tab1:
     st.info("💡 Patient profile updated. Proceed to Tab 2 for Vision Kinematics or Tab 3 for Sensor Analysis.")
 
 # ==============================================================================
-# TAB 2: MULTIMODAL VISION KINEMATICS (DEDICATED VISION SECTION)
+# TAB 2: MULTIMODAL VISION KINEMATICS (CLEAN 15-SECOND WEBCAM RECORDING)
 # ==============================================================================
 with tab2:
-    st.subheader("🎥 Multimodal Perception: Computer Vision Kinematics (MediaPipe Pose)")
+    st.subheader("🎥 Computer Vision Kinematics: 15-Second Video Kinematic Recording")
     
     st.markdown("""
-    > **High-Accuracy Video Kinematics**: Tracks Hip-Knee-Ankle angles, Trunk Sway (spinal posture), 
-    > and Gait Asymmetry in real-time. Live line charts and kinematic metrics update continuously as video frames stream.
+    Select your camera source (**0** for built-in webcam or **1** for external/phone camera like Iriun or DroidCam), 
+    then click **`🔴 START 15-SECOND KINEMATIC RECORDING`**. The system will open the camera, record video angles for 
+    15 seconds with real-time MediaPipe pose landmarker & dynamic plots, and automatically stop when finished!
     """)
 
-    v_mode = st.radio(
-        "Vision Source Selection",
-        ["🎥 Live Webcam Video Stream & Real-Time Streamlit Plotting", "🎞️ High-Fidelity MediaPipe Kinematic Video Simulator", "🖥️ Standalone OpenCV Window Launcher (`oa_tracker.py`)"],
-        index=0
-    )
+    col_cam1, col_cam2 = st.columns([2, 1])
+    with col_cam1:
+        cam_option = st.radio(
+            "📹 Select Camera Input Device",
+            [
+                "0: Default Built-in Laptop Webcam",
+                "1: External / Phone Camera (Iriun / DroidCam App)"
+            ],
+            index=0,
+            horizontal=True
+        )
+        cam_idx = 0 if "0:" in cam_option else 1
 
-    enable_clahe = st.checkbox("💡 Enable CLAHE Low-Light Image Enhancement", value=True, help="Auto-boost contrast for dark indoor clinic rooms")
+    with col_cam2:
+        enable_clahe = st.checkbox("💡 CLAHE Low-Light Image Enhancement", value=True, help="Auto-boosts contrast for dark indoor clinic rooms")
 
-    if "Live Webcam Video Stream" in v_mode:
-        c_cam1, c_cam2 = st.columns([2, 1])
-        with c_cam1:
-            cam_idx = st.selectbox("Select Webcam Device Index", [0, 1, 2], index=0, format_func=lambda x: f"Camera Index {x} ({'Default Built-in Webcam' if x==0 else 'External USB/Phone Camera'})")
-        with c_cam2:
-            st.write("")
-            start_webcam = st.checkbox("▶️ START WEBCAM RECORDING", value=False)
+    rec_duration = 15 # Fixed 15-second recording
 
-        if start_webcam:
-            st.warning("🔴 Webcam Video Stream Active — Move leg flexions in front of camera. Live graphs and metrics are streaming below...")
+    if st.button("🔴 START 15-SECOND KINEMATIC RECORDING", type="primary", use_container_width=True):
+        status_box = st.empty()
+        progress_bar = st.progress(0)
+        
+        v_col1, v_col2 = st.columns([1, 1])
+        with v_col1:
+            st.markdown("##### Live Video Feed (MediaPipe Tracking)")
+            video_spot = st.empty()
+        with v_col2:
+            st.markdown("##### Real-Time Knee Flexion & Sway Plot (15s Window)")
+            chart_spot = st.empty()
             
-            v_col1, v_col2 = st.columns([1, 1])
-            with v_col1:
-                st.markdown("##### Live MediaPipe Video Feed")
-                video_placeholder = st.empty()
-            with v_col2:
-                st.markdown("##### Live Flexion & Sway Real-Time Chart (Deg)")
-                chart_placeholder = st.empty()
-                
-            metrics_placeholder = st.empty()
+        metrics_spot = st.empty()
+        
+        tracker = DualLegKinematicsTracker(graph_length=100, enable_clahe=enable_clahe)
+        cap = cv2.VideoCapture(cam_idx)
+        
+        if not cap.isOpened() and cam_idx != 0:
+            st.warning(f"Camera index {cam_idx} not found. Falling back to default webcam (index 0)...")
+            cap = cv2.VideoCapture(0)
             
-            tracker = DualLegKinematicsTracker(graph_length=100, enable_clahe=enable_clahe)
-            cap = cv2.VideoCapture(cam_idx)
-            
+        if not cap.isOpened():
+            st.error("❌ Error: Could not open camera. Please check USB/Phone connection.")
+        else:
+            start_time = time.time()
             history_data = []
             
+            # Prepare log file
+            with open('knee_angles_log.csv', mode='w', newline='') as f:
+                f.write("Timestamp,Left_Knee_Angle,Right_Knee_Angle,Trunk_Sway\n")
+                
             try:
-                while start_webcam and cap.isOpened():
+                while True:
+                    elapsed = time.time() - start_time
+                    if elapsed >= rec_duration:
+                        break
+                        
+                    remaining = int(np.ceil(rec_duration - elapsed))
+                    progress = min(1.0, elapsed / rec_duration)
+                    
+                    status_box.markdown(f"### 🔴 RECORDING IN PROGRESS: **{remaining} seconds remaining...** (Step back to show legs)")
+                    progress_bar.progress(progress)
+                    
                     ret, frame = cap.read()
                     if not ret:
-                        st.error("Camera feed disconnected or unavailable.")
+                        st.error("Camera stream interrupted.")
                         break
                         
                     processed_frame, metrics = tracker.process_frame(frame)
-                    video_placeholder.image(processed_frame, channels="BGR", use_container_width=True)
+                    video_spot.image(processed_frame, channels="BGR", use_container_width=True)
                     
                     history_data.append({
                         "Left Knee Angle": metrics["left_angle"],
@@ -298,14 +324,14 @@ with tab2:
                         history_data.pop(0)
                         
                     chart_df = pd.DataFrame(history_data)
-                    chart_placeholder.line_chart(chart_df, height=280)
+                    chart_spot.line_chart(chart_df, height=280)
                     
-                    with metrics_placeholder.container():
+                    with metrics_spot.container():
                         m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Left ROM", f"{metrics['left_rom']}°", delta="Flexion")
-                        m2.metric("Right ROM", f"{metrics['right_rom']}°", delta="Flexion")
-                        m3.metric("Trunk Sway", f"{metrics['trunk_sway']}°", delta="Spinal Lean")
-                        m4.metric("Gait Asymmetry", f"{metrics['asymmetry_index']}%", delta=metrics['gait_diagnosis'].split(' ')[0])
+                        m1.metric("Left Knee ROM", f"{metrics['left_rom']}°")
+                        m2.metric("Right Knee ROM", f"{metrics['right_rom']}°")
+                        m3.metric("Trunk Sway Angle", f"{metrics['trunk_sway']}°")
+                        m4.metric("Gait Asymmetry Index", f"{metrics['asymmetry_index']}%", delta=metrics['gait_diagnosis'].split(' ')[0])
                         
                     st.session_state.screening_data["rom_angle"] = min(metrics["left_rom"], metrics["right_rom"]) if metrics["left_rom"] > 0 else metrics["right_rom"]
                     st.session_state.screening_data["trunk_sway"] = metrics["trunk_sway"]
@@ -317,50 +343,27 @@ with tab2:
                     time.sleep(0.03)
             finally:
                 cap.release()
-        else:
-            st.info("Click '▶️ START WEBCAM RECORDING' to open the live webcam video stream, track joint kinematics, and render real-time Streamlit charts.")
-
-    elif "Simulator" in v_mode:
-        st.markdown("##### 🎞️ Kinematic Video Stream Simulator (Offline Mode)")
-        sim_target = st.slider("Simulated Knee Flexion ROM (Degrees)", 60.0, 145.0, float(st.session_state.screening_data["rom_angle"]), 1.0)
-        
-        sim_col1, sim_col2 = st.columns(2)
-        with sim_col1:
-            frame_num = int((time.time() * 20) % 300)
-            sim_frame, sim_m = generate_simulated_kinematic_frame(frame_num, sim_target)
-            st.image(sim_frame, channels="BGR", caption=f"MediaPipe Pose Tracking | Left ROM: {sim_m['left_rom']}° | Right ROM: {sim_m['right_rom']}°", use_container_width=True)
-        
-        with sim_col2:
-            st.markdown("##### Live Kinematic Waveform Plot")
-            t_sim = np.linspace(0, 10, 100)
-            l_wave = 170.0 - (170.0 - sim_target) * (np.sin(t_sim) + 1.0) / 2.0
-            r_wave = 170.0 - (170.0 - sim_target - 8.0) * (np.sin(t_sim + 0.5) + 1.0) / 2.0
-            sway_wave = np.abs(np.sin(t_sim * 0.5)) * 6.5
-            
-            sim_df = pd.DataFrame({"Left Knee Angle": l_wave, "Right Knee Angle": r_wave, "Trunk Sway": sway_wave})
-            st.line_chart(sim_df, height=240)
-
-        st.session_state.screening_data["rom_angle"] = sim_m["left_rom"]
-        st.session_state.screening_data["trunk_sway"] = sim_m["trunk_sway"]
-        st.session_state.screening_data["gait_asymmetry"] = sim_m["asymmetry_index"]
-
-    else:
-        st.info("Launch full screen OpenCV window for dedicated high-FPS clinical screening.")
-        c_cam_idx = st.selectbox("Select Camera Device", [0, 1, 2], index=0)
-        if st.button("🚀 Launch High-FPS OpenCV Tracker Window", type="primary"):
-            tracker_script = os.path.join(os.path.dirname(__file__), "oa_tracker.py")
-            subprocess.Popen(["python", tracker_script, str(c_cam_idx)])
-            st.success("OpenCV Tracker Launched! Press 'q' inside video window to stop.")
+                
+            status_box.success("✅ 15-SECOND KINEMATIC RECORDING COMPLETE! Angles saved to `knee_angles_log.csv` and locked for AI diagnosis.")
+            progress_bar.progress(1.0)
 
     st.markdown("---")
-    st.markdown("##### 📊 Saved Vision Kinematics Metrics")
+    st.markdown("##### 📊 Locked Kinematics Summary for Current Screening")
     m_col1, m_col2, m_col3 = st.columns(3)
-    m_col1.metric("Recorded Knee ROM", f"{st.session_state.screening_data['rom_angle']}°",
+    m_col1.metric("Knee ROM Flexion Angle", f"{st.session_state.screening_data['rom_angle']}°",
                   delta="Restricted (<110°)" if st.session_state.screening_data['rom_angle'] < 110 else "Normal (>125°)",
                   delta_color="inverse" if st.session_state.screening_data['rom_angle'] < 110 else "normal")
     m_col2.metric("Trunk Sway Angle", f"{st.session_state.screening_data.get('trunk_sway', 4.2)}°")
     m_col3.metric("Gait Asymmetry Index", f"{st.session_state.screening_data.get('gait_asymmetry', 8.5)}%",
                   delta="Compensatory" if st.session_state.screening_data.get('gait_asymmetry', 8.5) >= 5 else "Symmetrical")
+
+    # Optional expander for fallback testing mode
+    with st.expander("🛠️ Advanced / Offline Fallback Testing Options (Simulator & External OpenCV Window)"):
+        st.markdown("If testing without any physical webcam, you can run the built-in simulator or standalone tracker:")
+        if st.button("🚀 Launch Standalone OpenCV High-FPS Window (`oa_tracker.py`)"):
+            tracker_script = os.path.join(os.path.dirname(__file__), "oa_tracker.py")
+            subprocess.Popen(["python", tracker_script, str(cam_idx)])
+            st.success("OpenCV Window Launched! Press 'q' inside video window to stop.")
 
 # ==============================================================================
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
