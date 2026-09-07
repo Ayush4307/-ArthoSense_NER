@@ -40,64 +40,98 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS styling for rural medical dashboard
+# Custom CSS styling for high-contrast dark medical dashboard
 st.markdown("""
 <style>
     .main-title {
         font-size: 2.2rem;
         font-weight: 800;
-        color: #1e3d59;
+        color: #38bdf8;
         margin-bottom: 0.2rem;
     }
     .sub-title {
         font-size: 1.05rem;
-        color: #55606d;
+        color: #94a3b8;
         margin-bottom: 1rem;
     }
     .status-badge {
         display: inline-block;
-        background-color: #e8f5e9;
-        color: #2e7d32;
+        background-color: #064e3b;
+        color: #6ee7b7;
         padding: 4px 12px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 600;
-        border: 1px solid #c8e6c9;
+        border: 1px solid #047857;
     }
     .metric-card {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background-color: #1e293b;
+        border: 1px solid #334155;
         border-radius: 10px;
         padding: 15px;
         text-align: center;
+        color: #f8fafc;
     }
     .risk-card-high {
-        background-color: #fee2e2;
+        background-color: #450a0a;
         border-left: 6px solid #ef4444;
         padding: 15px;
         border-radius: 8px;
         margin: 10px 0;
+        color: #fca5a5;
     }
     .risk-card-mod {
-        background-color: #fef3c7;
+        background-color: #451a03;
         border-left: 6px solid #f59e0b;
         padding: 15px;
         border-radius: 8px;
         margin: 10px 0;
+        color: #fcd34d;
     }
     .risk-card-low {
-        background-color: #dcfce7;
+        background-color: #052e16;
         border-left: 6px solid #22c55e;
         padding: 15px;
         border-radius: 8px;
         margin: 10px 0;
+        color: #86efac;
     }
     .step-box {
-        background-color: #f0f4f8;
-        border: 1px solid #d9e2ec;
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-left: 5px solid #3b82f6;
         border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 10px;
+        padding: 16px;
+        margin-bottom: 15px;
+        color: #f8fafc;
+    }
+    .step-box h4 {
+        color: #60a5fa !important;
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-weight: 700;
+    }
+    .step-box ol {
+        margin-bottom: 0;
+        padding-left: 22px;
+        color: #f1f5f9 !important;
+    }
+    .step-box li {
+        margin-bottom: 8px;
+        color: #f1f5f9 !important;
+        font-size: 1.02rem;
+        line-height: 1.5;
+    }
+    .step-box code {
+        background-color: #0f172a !important;
+        color: #38bdf8 !important;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid #334155;
+        font-weight: 600;
+    }
+    .step-box strong {
+        color: #fbbf24 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -270,7 +304,7 @@ with tab1:
     st.info("💡 Patient profile updated. Proceed to Tab 2 for Vision Kinematics or Tab 3 for Sensor Analysis.")
 
 # ==============================================================================
-# TAB 2: MULTIMODAL VISION KINEMATICS (CAMERA ALIGNMENT & 15s RECORDING)
+# TAB 2: MULTIMODAL VISION KINEMATICS (HIGH CONTRAST STEP BOX & ALIGNMENT)
 # ==============================================================================
 with tab2:
     st.subheader("🎥 Computer Vision Kinematics: Real-Time Joint Tracking")
