@@ -194,16 +194,23 @@ def run_sensor_recorder():
             cv2.putText(canvas, "NO USB HARDWARE DETECTED!", (graph_x + 170, graph_y + 130), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
             cv2.putText(canvas, "Connect Joint Band or switch to SIMULATED mode", (graph_x + 140, graph_y + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (254, 202, 202), 1)
         else:
-            # Plot high-speed cyan waveform line
+            # Plot high-speed dynamic waveform line
             if len(piezo_buffer) > 1:
                 p_pts = []
-                min_v = max(0.0, min(piezo_buffer) - 0.2)
-                max_v = max(5.0, max(piezo_buffer) + 0.2)
-                range_v = max(0.5, max_v - min_v)
+                buf_min = min(piezo_buffer)
+                buf_max = max(piezo_buffer)
+                
+                # Dynamic scope range centered around signal swing
+                center_v = (buf_min + buf_max) / 2.0
+                span = max(0.50, (buf_max - buf_min) * 1.4)
+                
+                plot_min = max(0.0, center_v - span / 2.0)
+                plot_max = min(5.0, center_v + span / 2.0)
+                range_v = max(0.20, plot_max - plot_min)
 
                 for i in range(len(piezo_buffer)):
                     px = graph_x + 20 + int((i / max_buf) * (graph_w - 40))
-                    norm_y = (piezo_buffer[i] - min_v) / range_v
+                    norm_y = (piezo_buffer[i] - plot_min) / range_v
                     py = graph_y + graph_h - 25 - int(norm_y * (graph_h - 60))
                     py = max(graph_y + 35, min(graph_y + graph_h - 15, py))
                     p_pts.append((px, py))

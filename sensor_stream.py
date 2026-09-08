@@ -88,6 +88,7 @@ class SensorStreamManager:
         Flushes buffer backlog to ensure immediate real-time tap response.
         """
         self.sample_idx += 1
+        piezo = 2.350
 
         if self.mode == "physical" and self.serial_conn and self.serial_conn.is_open:
             try:
@@ -109,59 +110,69 @@ class SensorStreamManager:
                         p_val = float(parts[-1] if len(parts) >= 1 else parts[0])
                         piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
 
-                        self.vibration_buffer.append(piezo)
-                        if len(self.vibration_buffer) > self.max_buffer_len:
-                            self.vibration_buffer.pop(0)
-                        
-                    # Noise Gate Deadband Filter (Lock to 2.350V flat baseline at rest)
-                    baseline_v = 2.350
-                    noise_thresh = 0.035
-                    if abs(piezo - baseline_v) < noise_thresh:
-                        piezo_clean = baseline_v
-                    else:
-                        piezo_clean = piezo
+                self.vibration_buffer.append(piezo)
+                if len(self.vibration_buffer) > self.max_buffer_len:
+                    self.vibration_buffer.pop(0)
+                
+                # Noise Gate Deadband Filter (Lock to 2.350V flat baseline at rest)
+                baseline_v = 2.350
+                noise_thresh = 0.035
+                if abs(piezo - baseline_v) < noise_thresh:
+                    piezo_clean = baseline_v
+                else:
+                    piezo_clean = piezo
 
-                    buf_arr = np.array(self.vibration_buffer)
-                    dc_offset = np.mean(buf_arr) if len(buf_arr) > 0 else baseline_v
-                    ac_signal = buf_arr - dc_offset
-                    rms = float(np.sqrt(np.mean(np.square(ac_signal)))) if len(ac_signal) > 0 else 0.0
+                buf_arr = np.array(self.vibration_buffer)
+                dc_offset = np.mean(buf_arr) if len(buf_arr) > 0 else baseline_v
+                ac_signal = buf_arr - dc_offset
+                rms = float(np.sqrt(np.mean(np.square(ac_signal)))) if len(ac_signal) > 0 else 0.0
 
-                    return {
-                        "mode": "Physical Serial (Piezo Contact Stethoscope)",
-                        "piezo_raw": round(piezo_clean, 3),
-                        "vibration_rms": round(rms, 3),
-                        "dominant_freq_hz": round(abs(rms * 180.0) % 350 + 40, 1),
-                        "crepitus_detected": rms > 0.35 or abs(piezo_clean - baseline_v) > 0.40
-                    }
+                return {
+                    "mode": "Physical Serial (Piezo Contact Stethoscope)",
+                    "piezo_raw": round(piezo_clean, 3),
+                    "vibration_rms": round(rms, 3),
+                    "dominant_freq_hz": round(abs(rms * 180.0) % 350 + 40, 1),
+                    "crepitus_detected": rms > 0.35 or abs(piezo_clean - baseline_v) > 0.40
+                }
             except Exception:
                 pass # Fallback to simulator
 
-        # Synthesizer generation based on joint condition (Noise Gate Active)
-        t = self.sample_idx * 0.1
+        # Synthesizer generation based on joint condition
+        t = self.sample_idx * 0.15
         dc_base = 2.350
-        if joint_condition == "healthy":
-            # 100% Solid Flat Baseline at Rest (No vibration)
-            piezo_val = dc_base
+        joint_cond_lower = str(joint_condition).lower()
+
+        if joint_cond_lower == "healthy":
+            # Smooth Baseline around 2.35V with minimal micro-vibration
+            micro_ripple = math.sin(t * 0.5) * 0.008
+            piezo_val = round(dc_base + micro_ripple, 3)
             dom_freq = 45.0
             rms = 0.012
             crepitus = False
-        elif joint_condition == "mild":
-            spike = 0.35 if (self.sample_idx % 25 in [0, 1]) else 0.0
-            piezo_val = round(dc_base + (math.sin(t) * 0.12 if spike > 0 else 0.0) + spike, 3)
+        elif joint_cond_lower == "mild":
+            # Baseline with mild acoustic friction ripples and periodic crepitus pulses
+            ripple = math.sin(t * 1.5) * 0.08 + math.cos(t * 3.2) * 0.04
+            spike = 0.35 if (self.sample_idx % 16 in [0, 1]) else 0.0
+            piezo_val = round(dc_base + ripple + spike, 3)
             dom_freq = 120.0
-            rms = 0.24
+            rms = 0.240
             crepitus = spike > 0
-        elif joint_condition == "moderate":
-            burst = 0.75 if (self.sample_idx % 18 in [0, 1, 2]) else 0.0
-            piezo_val = round(dc_base + math.sin(t * 1.5) * 0.28 + np.random.normal(0, 0.12) + burst, 3)
+        elif joint_cond_lower == "moderate":
+            # Dynamic acoustic wave with distinct crepitus bursts and friction noise
+            mod_wave = math.sin(t * 2.2) * 0.22 + math.cos(t * 4.5) * 0.12 + float(np.random.normal(0, 0.06))
+            burst = 0.65 if (self.sample_idx % 12 in [0, 1, 2]) else 0.0
+            piezo_val = round(dc_base + mod_wave + burst, 3)
             dom_freq = 240.0
-            rms = 0.52
+            rms = 0.520
             crepitus = True
         else: # severe
-            grinding = 1.35 if (self.sample_idx % 12 in [0, 1, 2, 3]) else -0.55
-            piezo_val = round(dc_base + math.sin(t * 2.0) * 0.45 + np.random.normal(0, 0.18) + grinding, 3)
+            # Heavy continuous bone-on-bone grinding, large voltage excursions (1.2V - 4.3V)
+            grinding_wave = math.sin(t * 3.5) * 0.45 + math.sin(t * 7.0) * 0.30 + float(np.random.normal(0, 0.14))
+            grinding_spike = 1.25 if (self.sample_idx % 8 in [0, 1, 2, 3]) else -0.45
+            piezo_val = round(dc_base + grinding_wave + grinding_spike, 3)
+            piezo_val = max(0.20, min(4.95, piezo_val)) # clamp to valid sensor range
             dom_freq = 380.0
-            rms = 0.84
+            rms = 0.840
             crepitus = True
 
         self.vibration_buffer.append(piezo_val)
@@ -169,14 +180,13 @@ class SensorStreamManager:
             self.vibration_buffer.pop(0)
 
         buf_arr = np.array(self.vibration_buffer)
-        calc_rms = float(np.sqrt(np.mean(np.square(buf_arr - dc_base)))) if len(buf_arr) > 0 else rms
+        ac_sig = buf_arr - dc_base
+        calc_rms = float(np.sqrt(np.mean(np.square(ac_sig)))) if len(ac_sig) > 0 else rms
 
         return {
             "mode": "Calibrated Synthesizer (Field Simulation)",
-            "accel": accel,
-            "gyro": gyro,
             "piezo_raw": piezo_val,
-            "vibration_rms": rms,
+            "vibration_rms": round(calc_rms, 3),
             "dominant_freq_hz": dom_freq,
             "crepitus_detected": crepitus
         }
