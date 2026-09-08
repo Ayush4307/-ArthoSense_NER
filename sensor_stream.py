@@ -63,11 +63,12 @@ class SensorStreamManager:
         self.max_buffer_len = 100
 
     def connect_serial(self) -> bool:
-        """Attempts to open physical COM port."""
+        """Attempts to open physical COM port with fast non-blocking timeout."""
         if not SERIAL_AVAILABLE or not self.port or "SIMULATED" in self.port:
             return False
         try:
-            self.serial_conn = serial.Serial(self.port, self.baud_rate, timeout=0.5)
+            self.serial_conn = serial.Serial(self.port, self.baud_rate, timeout=0.01)
+            self.serial_conn.reset_input_buffer() # Clear old backlog on connect
             return True
         except Exception:
             self.serial_conn = None
@@ -76,44 +77,41 @@ class SensorStreamManager:
     def close(self):
         """Closes serial connection."""
         if self.serial_conn and self.serial_conn.is_open:
-            self.serial_conn.close()
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
 
     def read_sample(self, joint_condition: str = "moderate") -> Dict[str, Any]:
         """
-        Reads one multimodal sample frame (IMU 6-DOF + Piezo Acoustic).
-        If in simulator mode or serial disconnected, generates calibrated biomechanical signals.
+        Reads latest zero-latency Piezo acoustic sample frame.
+        Flushes buffer backlog to ensure immediate real-time tap response.
         """
         self.sample_idx += 1
 
         if self.mode == "physical" and self.serial_conn and self.serial_conn.is_open:
             try:
-                line = self.serial_conn.readline().decode("utf-8").strip()
-                parts = [p.strip() for p in line.split(",") if p.strip()]
-                if parts:
-                    if len(parts) >= 7:
-                        ax, ay, az = float(parts[0]), float(parts[1]), float(parts[2])
-                        gx, gy, gz = float(parts[3]), float(parts[4]), float(parts[5])
-                        piezo = float(parts[6])
-                    elif len(parts) == 1:
-                        # Single Piezo disc reading (raw ADC 0-1023 or voltage)
-                        p_val = float(parts[0])
-                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
-                        ax, ay, az = 0.0, 0.0, 1.0
-                        gx, gy, gz = 0.0, 0.0, 0.0
-                    elif len(parts) == 2:
-                        p_val = float(parts[1])
-                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
-                        ax, ay, az = 0.0, 0.0, 1.0
-                        gx, gy, gz = 0.0, 0.0, 0.0
-                    else:
-                        p_val = float(parts[-1])
-                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
-                        ax, ay, az = 0.0, 0.0, 1.0
-                        gx, gy, gz = 0.0, 0.0, 0.0
+                line_to_parse = None
+                # Zero-latency buffer flush: read all waiting bytes and take the latest complete line
+                if self.serial_conn.in_waiting > 0:
+                    raw_data = self.serial_conn.read(self.serial_conn.in_waiting).decode("utf-8", errors="ignore")
+                    lines = [l.strip() for l in raw_data.replace("\r", "").split("\n") if l.strip()]
+                    if lines:
+                        line_to_parse = lines[-1]
+                else:
+                    raw_line = self.serial_conn.readline().decode("utf-8", errors="ignore").strip()
+                    if raw_line:
+                        line_to_parse = raw_line
 
-                    self.vibration_buffer.append(piezo)
-                    if len(self.vibration_buffer) > self.max_buffer_len:
-                        self.vibration_buffer.pop(0)
+                if line_to_parse:
+                    parts = [p.strip() for p in line_to_parse.split(",") if p.strip()]
+                    if parts:
+                        p_val = float(parts[-1] if len(parts) >= 1 else parts[0])
+                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
+
+                        self.vibration_buffer.append(piezo)
+                        if len(self.vibration_buffer) > self.max_buffer_len:
+                            self.vibration_buffer.pop(0)
                         
                     # Noise Gate Deadband Filter (Lock to 2.350V flat baseline at rest)
                     baseline_v = 2.350

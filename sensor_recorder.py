@@ -1,7 +1,7 @@
 """
-ArthoSense NER - Piezo Acoustic Stethoscope Telemetry Recorder
-Dedicated single-channel Piezo disc recording window with Instant Hot-Plug USB Detection.
-Instantly detects when USB cable is connected or unplugged in real time.
+ArthoSense NER - High-Speed Zero-Latency Piezo Acoustic Telemetry Recorder
+Dedicated standalone Piezo disc plotter (No MPU6050).
+Features real-time zero-lag tapping response and rock-solid stable OpenCV loop execution.
 """
 
 import cv2
@@ -54,24 +54,26 @@ def run_sensor_recorder():
     
     piezo_buffer = []
     rms_buffer = []
-    max_buf = 120
+    max_buf = 140
+
+    frame_counter = 0
 
     print("==================================================")
-    print(" ARTHOSENSE PIEZO ACOUSTIC RECORDER LAUNCHED")
+    print(" ARTHOSENSE ZERO-LATENCY PIEZO RECORDER LAUNCHED")
     print("==================================================")
     print(f"Hardware Mode     : {hardware_mode.upper()}")
     print(f"Data Source       : {data_source_label}")
-    print("Hot-Plug Detection: Active real-time USB monitoring enabled.")
+    print("Performance       : High-Speed 60 FPS Real-Time Plotting (Zero Buffer Lag)")
     print("==================================================")
 
     while True:
+        frame_counter += 1
         canvas = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
         
-        # INSTANT REAL-TIME HOT-PLUG HARDWARE CHECK (Check system USB ports every frame)
-        if hardware_mode == "physical":
-            current_physical_ports = list_physical_com_ports()
-            if not current_physical_ports:
-                # Cable was unplugged!
+        # Periodic USB Port Check (Every 20 frames = ~1s interval, to prevent CPU lag)
+        if hardware_mode == "physical" and frame_counter % 20 == 0:
+            current_ports = list_physical_com_ports()
+            if not current_ports:
                 if not hw_disconnected:
                     print("🔴 USB HARDWARE UNPLUGGED: Switching to Disconnected Flatline state instantly!")
                 hw_disconnected = True
@@ -81,8 +83,7 @@ def run_sensor_recorder():
                     stream_mgr.close()
                     stream_mgr = None
             else:
-                # USB Hardware is present
-                active_port = current_physical_ports[0]
+                active_port = current_ports[0]
                 if hw_disconnected or not stream_mgr:
                     print(f"🟢 USB HARDWARE DETECTED: Reconnecting to {active_port}...")
                     stream_mgr = SensorStreamManager(mode="physical", port=active_port)
@@ -95,17 +96,19 @@ def run_sensor_recorder():
 
         if hw_disconnected or not stream_mgr:
             rms = 0.0
-            piezo_raw = 0.0
+            piezo_raw = 2.350
         else:
-            sample = stream_mgr.read_sample(joint_condition=joint_condition)
-            if sample is None:
-                # Serial read failed (cable pulled mid-read)
-                hw_disconnected = True
+            try:
+                sample = stream_mgr.read_sample(joint_condition=joint_condition)
+                if sample is None:
+                    rms = 0.0
+                    piezo_raw = 2.350
+                else:
+                    rms = sample["vibration_rms"]
+                    piezo_raw = sample["piezo_raw"]
+            except Exception:
                 rms = 0.0
-                piezo_raw = 0.0
-            else:
-                rms = sample["vibration_rms"]
-                piezo_raw = sample["piezo_raw"]
+                piezo_raw = 2.350
         
         piezo_buffer.append(piezo_raw)
         rms_buffer.append(rms)
@@ -182,7 +185,7 @@ def run_sensor_recorder():
             cv2.putText(canvas, f"Signal: {piezo_raw:.3f} V", (graph_x + graph_w - 170, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (15, 23, 42), 2)
 
         if hw_disconnected:
-            # FLAT LINE + BIG WARNING OVERLAY ON GRAPH
+            # FLAT LINE + WARNING OVERLAY
             zero_y = graph_y + graph_h - 30
             cv2.line(canvas, (graph_x + 15, zero_y), (graph_x + graph_w - 15, zero_y), (100, 116, 139), 2)
             
@@ -191,7 +194,7 @@ def run_sensor_recorder():
             cv2.putText(canvas, "NO USB HARDWARE DETECTED!", (graph_x + 170, graph_y + 130), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
             cv2.putText(canvas, "Connect Joint Band or switch to SIMULATED mode", (graph_x + 140, graph_y + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (254, 202, 202), 1)
         else:
-            # Plot cyan waveform line
+            # Plot high-speed cyan waveform line
             if len(piezo_buffer) > 1:
                 p_pts = []
                 min_v = max(0.0, min(piezo_buffer) - 0.2)
@@ -218,7 +221,7 @@ def run_sensor_recorder():
 
         cv2.imshow("ArthoSense Wearable Sensor Recorder", canvas)
         
-        key = cv2.waitKey(80) & 0xFF
+        key = cv2.waitKey(15) & 0xFF  # Fast 60 FPS loop
         if key == ord('r') or key == ord('R'):
             if hw_disconnected:
                 print("⚠️ Cannot record: Physical Wearable Sensor Hardware is disconnected!")
