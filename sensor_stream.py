@@ -123,37 +123,31 @@ class SensorStreamManager:
             except Exception:
                 pass # Fallback to simulator
 
-        # Synthesizer generation based on joint condition
+        # Synthesizer generation based on joint condition (Calibrated to 2.35V baseline)
         t = self.sample_idx * 0.1
+        dc_base = 2.35
         if joint_condition == "healthy":
-            base_noise = np.random.normal(0, 0.04)
-            piezo_val = round(abs(math.sin(t * 0.5) * 0.08 + base_noise), 3)
-            accel = {"x": round(math.cos(t) * 0.2, 2), "y": round(math.sin(t) * 0.3, 2), "z": 0.98}
-            gyro = {"x": round(math.sin(t) * 15.0, 1), "y": round(math.cos(t) * 12.0, 1), "z": 1.2}
+            # Stable resting baseline (2.31V - 2.39V)
+            ripple = np.random.normal(0, 0.025)
+            piezo_val = round(dc_base + math.sin(t * 0.5) * 0.02 + ripple, 3)
             dom_freq = 45.0
-            rms = 0.12
+            rms = round(float(abs(ripple) + 0.015), 3)
             crepitus = False
         elif joint_condition == "mild":
             spike = 0.35 if (self.sample_idx % 25 in [0, 1]) else 0.0
-            piezo_val = round(abs(math.sin(t) * 0.15 + np.random.normal(0, 0.08) + spike), 3)
-            accel = {"x": round(math.cos(t) * 0.4, 2), "y": round(math.sin(t) * 0.5, 2), "z": 0.95}
-            gyro = {"x": round(math.sin(t) * 25.0, 1), "y": round(math.cos(t) * 20.0, 1), "z": 3.4}
+            piezo_val = round(dc_base + math.sin(t) * 0.12 + np.random.normal(0, 0.06) + spike, 3)
             dom_freq = 120.0
-            rms = 0.28
+            rms = 0.24
             crepitus = spike > 0
         elif joint_condition == "moderate":
-            burst = 0.65 if (self.sample_idx % 18 in [0, 1, 2]) else 0.0
-            piezo_val = round(abs(math.sin(t * 1.5) * 0.25 + np.random.normal(0, 0.14) + burst), 3)
-            accel = {"x": round(math.cos(t * 1.2) * 0.6, 2), "y": round(math.sin(t * 1.2) * 0.7, 2), "z": 0.91}
-            gyro = {"x": round(math.sin(t * 1.2) * 45.0, 1), "y": round(math.cos(t * 1.2) * 38.0, 1), "z": 8.5}
+            burst = 0.75 if (self.sample_idx % 18 in [0, 1, 2]) else 0.0
+            piezo_val = round(dc_base + math.sin(t * 1.5) * 0.28 + np.random.normal(0, 0.12) + burst, 3)
             dom_freq = 240.0
             rms = 0.52
             crepitus = True
         else: # severe
-            grinding = 0.85 if (self.sample_idx % 12 in [0, 1, 2, 3, 4]) else 0.25
-            piezo_val = round(abs(math.sin(t * 2.0) * 0.35 + np.random.normal(0, 0.22) + grinding), 3)
-            accel = {"x": round(math.cos(t * 2.0) * 0.9, 2), "y": round(math.sin(t * 2.0) * 1.1, 2), "z": 0.82}
-            gyro = {"x": round(math.sin(t * 2.0) * 80.0, 1), "y": round(math.cos(t * 2.0) * 72.0, 1), "z": 18.2}
+            grinding = 1.35 if (self.sample_idx % 12 in [0, 1, 2, 3]) else -0.55
+            piezo_val = round(dc_base + math.sin(t * 2.0) * 0.45 + np.random.normal(0, 0.18) + grinding, 3)
             dom_freq = 380.0
             rms = 0.84
             crepitus = True
@@ -161,6 +155,9 @@ class SensorStreamManager:
         self.vibration_buffer.append(piezo_val)
         if len(self.vibration_buffer) > self.max_buffer_len:
             self.vibration_buffer.pop(0)
+
+        buf_arr = np.array(self.vibration_buffer)
+        calc_rms = float(np.sqrt(np.mean(np.square(buf_arr - dc_base)))) if len(buf_arr) > 0 else rms
 
         return {
             "mode": "Calibrated Synthesizer (Field Simulation)",
