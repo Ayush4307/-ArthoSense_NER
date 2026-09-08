@@ -16,6 +16,13 @@ try:
 except Exception:
     SERIAL_AVAILABLE = False
 
+def list_physical_com_ports() -> List[str]:
+    """Returns only real physical USB COM ports connected to OS."""
+    if not SERIAL_AVAILABLE:
+        return []
+    ports = serial.tools.list_ports.comports()
+    return [p.device for p in ports]
+
 def list_available_com_ports() -> List[str]:
     """Returns a list of available serial COM ports on Windows."""
     if not SERIAL_AVAILABLE:
@@ -28,14 +35,14 @@ def list_available_com_ports() -> List[str]:
 
 def get_connected_hardware_info() -> Tuple[bool, str, List[str]]:
     """
-    Scans system COM ports and returns:
+    Scans system COM ports dynamically and returns:
     (is_connected, status_message, list_of_port_descriptions)
     """
     if not SERIAL_AVAILABLE:
         return False, "⚠️ PySerial module missing. Using Calibrated Field Simulator.", []
     ports = serial.tools.list_ports.comports()
     if not ports:
-        return False, "⚠️ No Physical Hardware / Joint Band Detected! Please connect the USB Wearable Hardware Joint Band or switch to Calibrated Simulator Mode.", []
+        return False, "⚠️ No Physical Hardware / Joint Band Detected! Connect USB Hardware or use Simulator.", []
     
     port_descs = [f"{p.device} - {p.description}" for p in ports]
     primary_device = port_descs[0]

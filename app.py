@@ -493,10 +493,15 @@ with tab3:
 
     if hardware_mode == "physical":
         is_hw_connected, hw_msg, hw_ports = get_connected_hardware_info()
-        if not is_hw_connected:
-            st.error("⚠️ **No Physical Hardware / Joint Band Detected!** Please connect the Wearable Hardware Joint Band (MPU6050 + Piezo Stethoscope) to your laptop USB port, or select `SIMULATED` mode above.")
-        else:
-            st.success(f"✅ **Hardware Joint Band Online:** {hw_msg}")
+        col_scan1, col_scan2 = st.columns([3, 1])
+        with col_scan1:
+            if not is_hw_connected:
+                st.error("⚠️ **No Physical Hardware / Joint Band Detected!** Connect the USB Wearable Joint Band or select `SIMULATED` mode above.")
+            else:
+                st.success(f"✅ **Hardware Joint Band Online:** {hw_msg}")
+        with col_scan2:
+            if st.button("🔄 Scan USB Ports"):
+                st.rerun()
 
     st.markdown("""
     <div class='step-box'>
@@ -513,9 +518,18 @@ with tab3:
     col_btn1, col_btn2 = st.columns([2, 1])
     with col_btn1:
         if st.button("📡 OPEN SENSOR MONITOR & RECORDING", type="primary", use_container_width=True):
-            recorder_script = os.path.join(os.path.dirname(__file__), "sensor_recorder.py")
-            subprocess.Popen(["python", recorder_script, sensor_cond, hardware_mode])
-            st.success(f"Sensor Monitor Opened in {'Physical Serial Hardware' if hardware_mode=='physical' else 'Calibrated Simulator'} mode! Press 'R' key to record. Auto-closes when done.")
+            if hardware_mode == "physical":
+                is_hw_now, _, _ = get_connected_hardware_info()
+                if not is_hw_now:
+                    st.error("❌ Cannot launch recorder in PHYSICAL mode: No USB Wearable Joint Band is connected! Please plug in the USB cable or select SIMULATED mode.")
+                else:
+                    recorder_script = os.path.join(os.path.dirname(__file__), "sensor_recorder.py")
+                    subprocess.Popen(["python", recorder_script, sensor_cond, hardware_mode])
+                    st.success("Sensor Monitor Opened in Physical Serial Hardware mode! Press 'R' key to record.")
+            else:
+                recorder_script = os.path.join(os.path.dirname(__file__), "sensor_recorder.py")
+                subprocess.Popen(["python", recorder_script, sensor_cond, hardware_mode])
+                st.success("Sensor Monitor Opened in Calibrated Simulator mode! Press 'R' key to record.")
     with col_btn2:
         if st.button("🔄 Import Recorded Sensor Data", type="secondary", use_container_width=True):
             if load_latest_sensor_log():

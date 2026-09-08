@@ -1,7 +1,7 @@
 """
 ArthoSense NER - Piezo Acoustic Stethoscope Telemetry Recorder
-Dedicated single-channel Piezo disc recording window.
-Displays real-time voltage wave, calculates Vibration RMS, and saves CSV on 'R' key trigger.
+Dedicated single-channel Piezo disc recording window with Instant Hot-Plug USB Detection.
+Instantly detects when USB cable is connected or unplugged in real time.
 """
 
 import cv2
@@ -11,7 +11,7 @@ import csv
 import os
 import sys
 import math
-from sensor_stream import SensorStreamManager, list_available_com_ports
+from sensor_stream import SensorStreamManager, list_available_com_ports, list_physical_com_ports
 
 def run_sensor_recorder():
     joint_condition = sys.argv[1] if len(sys.argv) > 1 else "moderate"
@@ -24,8 +24,7 @@ def run_sensor_recorder():
     hw_disconnected = False
 
     if hardware_mode == "physical":
-        ports = list_available_com_ports()
-        real_ports = [p for p in ports if "SIMULATED" not in p and "No physical" not in p]
+        real_ports = list_physical_com_ports()
         target_port = requested_port if requested_port in real_ports else (real_ports[0] if real_ports else None)
         
         if target_port:
@@ -35,7 +34,7 @@ def run_sensor_recorder():
                 data_source_label = f"Physical Piezo Hardware ({target_port} @ 115200)"
             else:
                 hw_disconnected = True
-                data_source_label = "PHYSICAL HARDWARE DISCONNECTED (COM Port Unreachable)"
+                data_source_label = "PHYSICAL HARDWARE DISCONNECTED (Port Unreachable)"
         else:
             hw_disconnected = True
             data_source_label = "PHYSICAL HARDWARE DISCONNECTED (No USB Serial Band Found)"
@@ -62,20 +61,51 @@ def run_sensor_recorder():
     print("==================================================")
     print(f"Hardware Mode     : {hardware_mode.upper()}")
     print(f"Data Source       : {data_source_label}")
-    if hw_disconnected:
-        print("⚠️ HARDWARE STATE : DISCONNECTED - Zero Signal Flatline Active.")
+    print("Hot-Plug Detection: Active real-time USB monitoring enabled.")
     print("==================================================")
 
     while True:
         canvas = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
         
+        # INSTANT REAL-TIME HOT-PLUG HARDWARE CHECK (Check system USB ports every frame)
+        if hardware_mode == "physical":
+            current_physical_ports = list_physical_com_ports()
+            if not current_physical_ports:
+                # Cable was unplugged!
+                if not hw_disconnected:
+                    print("🔴 USB HARDWARE UNPLUGGED: Switching to Disconnected Flatline state instantly!")
+                hw_disconnected = True
+                is_physical = False
+                data_source_label = "PHYSICAL HARDWARE DISCONNECTED (USB Cable Unplugged)"
+                if stream_mgr:
+                    stream_mgr.close()
+                    stream_mgr = None
+            else:
+                # USB Hardware is present
+                active_port = current_physical_ports[0]
+                if hw_disconnected or not stream_mgr:
+                    print(f"🟢 USB HARDWARE DETECTED: Reconnecting to {active_port}...")
+                    stream_mgr = SensorStreamManager(mode="physical", port=active_port)
+                    if stream_mgr.connect_serial():
+                        hw_disconnected = False
+                        is_physical = True
+                        data_source_label = f"Physical Piezo Hardware ({active_port} @ 115200)"
+                    else:
+                        hw_disconnected = True
+
         if hw_disconnected or not stream_mgr:
             rms = 0.0
             piezo_raw = 0.0
         else:
             sample = stream_mgr.read_sample(joint_condition=joint_condition)
-            rms = sample["vibration_rms"]
-            piezo_raw = sample["piezo_raw"]
+            if sample is None:
+                # Serial read failed (cable pulled mid-read)
+                hw_disconnected = True
+                rms = 0.0
+                piezo_raw = 0.0
+            else:
+                rms = sample["vibration_rms"]
+                piezo_raw = sample["piezo_raw"]
         
         piezo_buffer.append(piezo_raw)
         rms_buffer.append(rms)
@@ -142,18 +172,17 @@ def run_sensor_recorder():
         val_str2 = f"{piezo_raw:.3f} V" if not hw_disconnected else "0.000 V (NO SIGNAL)"
         cv2.putText(canvas, val_str2, (430, 128), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (239, 68, 68) if hw_disconnected else (56, 189, 248), 2)
 
-        # Render Live Telemetry Graph Box (Cyan/Blue Plotter style)
+        # Render Live Telemetry Graph Box
         graph_x, graph_y, graph_w, graph_h = 20, 165, 740, 280
         cv2.rectangle(canvas, (graph_x, graph_y), (graph_x + graph_w, graph_y + graph_h), (30, 41, 59), -1)
         cv2.putText(canvas, "Piezo Disc Live Acoustic Waveform (A0 Volts)", (graph_x + 15, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
-        # Draw legend / value marker
         if not hw_disconnected:
             cv2.rectangle(canvas, (graph_x + graph_w - 180, graph_y + 10), (graph_x + graph_w - 15, graph_y + 32), (56, 189, 248), -1)
             cv2.putText(canvas, f"Signal: {piezo_raw:.3f} V", (graph_x + graph_w - 170, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (15, 23, 42), 2)
 
         if hw_disconnected:
-            # Render FLAT LINE + BIG WARNING OVERLAY ON GRAPH
+            # FLAT LINE + BIG WARNING OVERLAY ON GRAPH
             zero_y = graph_y + graph_h - 30
             cv2.line(canvas, (graph_x + 15, zero_y), (graph_x + graph_w - 15, zero_y), (100, 116, 139), 2)
             
@@ -162,7 +191,7 @@ def run_sensor_recorder():
             cv2.putText(canvas, "NO USB HARDWARE DETECTED!", (graph_x + 170, graph_y + 130), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
             cv2.putText(canvas, "Connect Joint Band or switch to SIMULATED mode", (graph_x + 140, graph_y + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (254, 202, 202), 1)
         else:
-            # Plot waveform lines (Cyan/Blue matching Arduino Serial Plotter!)
+            # Plot cyan waveform line
             if len(piezo_buffer) > 1:
                 p_pts = []
                 min_v = max(0.0, min(piezo_buffer) - 0.2)
@@ -171,14 +200,12 @@ def run_sensor_recorder():
 
                 for i in range(len(piezo_buffer)):
                     px = graph_x + 20 + int((i / max_buf) * (graph_w - 40))
-                    # Map voltage to graph height
                     norm_y = (piezo_buffer[i] - min_v) / range_v
                     py = graph_y + graph_h - 25 - int(norm_y * (graph_h - 60))
                     py = max(graph_y + 35, min(graph_y + graph_h - 15, py))
                     p_pts.append((px, py))
 
-                # Draw cyan line
-                cv2.polylines(canvas, [np.array(p_pts)], False, (248, 189, 56), 2, cv2.LINE_AA) # BGR for Cyan (#38bdf8)
+                cv2.polylines(canvas, [np.array(p_pts)], False, (248, 189, 56), 2, cv2.LINE_AA)
 
         # Footer Instruction Bar
         cv2.rectangle(canvas, (0, win_h - 35), (win_w, win_h), (30, 41, 59), -1)
