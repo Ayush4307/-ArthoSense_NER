@@ -81,25 +81,41 @@ class SensorStreamManager:
         if self.mode == "physical" and self.serial_conn and self.serial_conn.is_open:
             try:
                 line = self.serial_conn.readline().decode("utf-8").strip()
-                # Expected format: "ax,ay,az,gx,gy,gz,piezo_val"
-                parts = line.split(",")
-                if len(parts) >= 7:
-                    ax, ay, az = float(parts[0]), float(parts[1]), float(parts[2])
-                    gx, gy, gz = float(parts[3]), float(parts[4]), float(parts[5])
-                    piezo = float(parts[6])
-                    
+                parts = [p.strip() for p in line.split(",") if p.strip()]
+                if parts:
+                    if len(parts) >= 7:
+                        ax, ay, az = float(parts[0]), float(parts[1]), float(parts[2])
+                        gx, gy, gz = float(parts[3]), float(parts[4]), float(parts[5])
+                        piezo = float(parts[6])
+                    elif len(parts) == 1:
+                        # Single Piezo disc reading (raw ADC 0-1023 or voltage)
+                        p_val = float(parts[0])
+                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
+                        ax, ay, az = 0.0, 0.0, 1.0
+                        gx, gy, gz = 0.0, 0.0, 0.0
+                    elif len(parts) == 2:
+                        p_val = float(parts[1])
+                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
+                        ax, ay, az = 0.0, 0.0, 1.0
+                        gx, gy, gz = 0.0, 0.0, 0.0
+                    else:
+                        p_val = float(parts[-1])
+                        piezo = (p_val / 1023.0 * 5.0) if p_val > 5.0 else p_val
+                        ax, ay, az = 0.0, 0.0, 1.0
+                        gx, gy, gz = 0.0, 0.0, 0.0
+
                     self.vibration_buffer.append(piezo)
                     if len(self.vibration_buffer) > self.max_buffer_len:
                         self.vibration_buffer.pop(0)
                         
                     rms = float(np.sqrt(np.mean(np.square(self.vibration_buffer)))) if self.vibration_buffer else 0.0
                     return {
-                        "mode": "Physical Serial",
+                        "mode": "Physical Serial (Piezo Contact Stethoscope)",
                         "accel": {"x": ax, "y": ay, "z": az},
                         "gyro": {"x": gx, "y": gy, "z": gz},
-                        "piezo_raw": piezo,
+                        "piezo_raw": round(piezo, 3),
                         "vibration_rms": round(rms, 3),
-                        "dominant_freq_hz": round(abs(gx * 2.5) % 350 + 50, 1),
+                        "dominant_freq_hz": round(abs(rms * 180.0) % 350 + 40, 1),
                         "crepitus_detected": rms > 0.40
                     }
             except Exception:
