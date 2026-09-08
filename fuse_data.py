@@ -17,24 +17,46 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='mock_imu_data.cs
         print("Make sure both CSV files are generated and in the same folder!")
         return None
 
-    # 2. Sort both datasets by their Unix Timestamp
-    cam_df = cam_df.sort_values('Timestamp')
-    imu_df = imu_df.sort_values('Timestamp')
+    if cam_df.empty or imu_df.empty:
+        print("Error: One or both CSV files are empty!")
+        return None
 
-    # 3. Synchronization Engine
-    print("Synchronizing timestamps across modalities...")
+    # 2. Sort both datasets by Timestamp
+    cam_df = cam_df.sort_values('Timestamp').reset_index(drop=True)
+    imu_df = imu_df.sort_values('Timestamp').reset_index(drop=True)
+
+    # 3. Calculate Relative Elapsed Time (t_rel = t - t_0) for 15-second session alignment
+    cam_t0 = cam_df['Timestamp'].iloc[0]
+    imu_t0 = imu_df['Timestamp'].iloc[0]
+
+    cam_df['Relative_Time'] = (cam_df['Timestamp'] - cam_t0).round(2)
+    imu_df['Relative_Time'] = (imu_df['Timestamp'] - imu_t0).round(2)
+
+    # 4. Synchronization Engine: Merge on Relative Elapsed Time
+    print("Synchronizing 15-second motion window across vision & wearable modalities...")
+    
+    # Drop raw timestamp columns before merge to avoid confusion, keeping Relative_Time
+    imu_df_to_merge = imu_df.drop(columns=['Timestamp'], errors='ignore')
+
     merged_df = pd.merge_asof(
         cam_df, 
-        imu_df, 
-        on='Timestamp', 
+        imu_df_to_merge, 
+        on='Relative_Time', 
         direction='nearest', 
-        tolerance=0.1 # Maximum allowable time difference is 100 milliseconds
+        tolerance=1.5 # 1.5 seconds relative window tolerance
     )
 
-    # 4. Clean data
+    # Clean data (drop any un-synced NaNs)
     initial_length = len(merged_df)
-    merged_df = merged_df.dropna()
+    merged_df = merged_df.dropna().reset_index(drop=True)
     dropped_rows = initial_length - len(merged_df)
+
+    # Reorder columns cleanly
+    preferred_cols = ['Timestamp', 'Relative_Time', 'Left_Knee_Angle', 'Right_Knee_Angle', 'Trunk_Sway',
+                      'Vibration_RMS', 'Accel_Impact', 'Gyro_Speed', 'Acoustic_Signal']
+    existing_cols = [c for c in preferred_cols if c in merged_df.columns]
+    remaining_cols = [c for c in merged_df.columns if c not in existing_cols]
+    merged_df = merged_df[existing_cols + remaining_cols]
 
     # 5. Save final synced Master Patient Data
     merged_df.to_csv(output_csv, index=False)
