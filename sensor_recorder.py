@@ -1,8 +1,7 @@
 """
-ArthoSense NER - Wearable Sensor Recorder (GUI Launcher)
-2-Phase Standby & Recording Mode for MPU6050 IMU + Piezo Acoustic Contact Stethoscope.
-Strictly respects Physical Hardware mode vs Simulator mode:
-If Physical mode is chosen and hardware is disconnected, renders 0-signal flatline & error state.
+ArthoSense NER - Piezo Acoustic Stethoscope Telemetry Recorder
+Dedicated single-channel Piezo disc recording window.
+Displays real-time voltage wave, calculates Vibration RMS, and saves CSV on 'R' key trigger.
 """
 
 import cv2
@@ -33,7 +32,7 @@ def run_sensor_recorder():
             stream_mgr = SensorStreamManager(mode="physical", port=target_port)
             if stream_mgr.connect_serial():
                 is_physical = True
-                data_source_label = f"Physical Hardware ({target_port} @ 115200)"
+                data_source_label = f"Physical Piezo Hardware ({target_port} @ 115200)"
             else:
                 hw_disconnected = True
                 data_source_label = "PHYSICAL HARDWARE DISCONNECTED (COM Port Unreachable)"
@@ -42,10 +41,10 @@ def run_sensor_recorder():
             data_source_label = "PHYSICAL HARDWARE DISCONNECTED (No USB Serial Band Found)"
     else:
         stream_mgr = SensorStreamManager(mode="simulator")
-        data_source_label = "Calibrated Field Simulator"
+        data_source_label = "Calibrated Piezo Field Simulator"
 
     # Canvas setup
-    win_w, win_h = 750, 480
+    win_w, win_h = 780, 500
     bg_color = (15, 23, 42) # Slate dark #0f172a
     
     csv_file = "mock_imu_data.csv"
@@ -54,14 +53,12 @@ def run_sensor_recorder():
     start_time = None
     recorded_rows = []
     
-    vibration_buffer = []
-    accel_buffer = []
-    gyro_buffer = []
     piezo_buffer = []
-    max_buf = 100
+    rms_buffer = []
+    max_buf = 120
 
     print("==================================================")
-    print(" ARTHOSENSE WEARABLE SENSOR RECORDER LAUNCHED")
+    print(" ARTHOSENSE PIEZO ACOUSTIC RECORDER LAUNCHED")
     print("==================================================")
     print(f"Hardware Mode     : {hardware_mode.upper()}")
     print(f"Data Source       : {data_source_label}")
@@ -73,28 +70,19 @@ def run_sensor_recorder():
         canvas = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
         
         if hw_disconnected or not stream_mgr:
-            # Physical mode selected but hardware is disconnected -> FLATLINE ZERO SIGNAL
             rms = 0.0
             piezo_raw = 0.0
-            accel_z = 0.0
-            gyro_mag = 0.0
         else:
             sample = stream_mgr.read_sample(joint_condition=joint_condition)
             rms = sample["vibration_rms"]
             piezo_raw = sample["piezo_raw"]
-            accel_z = abs(sample["accel"]["z"])
-            gyro_mag = abs(sample["gyro"]["x"]) + abs(sample["gyro"]["y"])
         
-        vibration_buffer.append(rms)
         piezo_buffer.append(piezo_raw)
-        accel_buffer.append(accel_z)
-        gyro_buffer.append(gyro_mag)
+        rms_buffer.append(rms)
         
-        if len(vibration_buffer) > max_buf:
-            vibration_buffer.pop(0)
+        if len(piezo_buffer) > max_buf:
             piezo_buffer.pop(0)
-            accel_buffer.pop(0)
-            gyro_buffer.pop(0)
+            rms_buffer.pop(0)
             
         current_time = time.time()
         
@@ -105,25 +93,23 @@ def run_sensor_recorder():
             recorded_rows.append({
                 "Timestamp": current_time,
                 "Vibration_RMS": rms,
-                "Accel_Impact": round(accel_z, 3),
-                "Gyro_Speed": round(gyro_mag, 1),
                 "Acoustic_Signal": round(piezo_raw, 3)
             })
             
             if elapsed >= 15.0:
                 try:
                     with open(csv_file, mode="w", newline="") as f:
-                        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Vibration_RMS", "Accel_Impact", "Gyro_Speed", "Acoustic_Signal"])
+                        writer = csv.DictWriter(f, fieldnames=["Timestamp", "Vibration_RMS", "Acoustic_Signal"])
                         writer.writeheader()
                         writer.writerows(recorded_rows)
-                    print(f"✅ Recording Complete! Saved {len(recorded_rows)} sensor frames to {csv_file}")
+                    print(f"✅ Recording Complete! Saved {len(recorded_rows)} Piezo frames to {csv_file}")
                 except Exception as err:
                     print(f"Error writing sensor CSV: {err}")
                 break
 
-        # Render Header
+        # Render Header Bar
         cv2.rectangle(canvas, (0, 0), (win_w, 60), (30, 41, 59), -1)
-        cv2.putText(canvas, "ArthoSense NER - Wearable Sensor Telemetry", (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(canvas, "ArthoSense NER - Piezo Acoustic Stethoscope Telemetry", (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
         # Source Sub-label
         src_color = (34, 197, 94) if is_physical else ((239, 68, 68) if hw_disconnected else (234, 179, 8))
@@ -142,70 +128,57 @@ def run_sensor_recorder():
             cv2.rectangle(canvas, (win_w - 280, 15), (win_w - 20, 45), (239, 68, 68), -1) # Red
             cv2.putText(canvas, f"RECORDING: {remaining:.1f}s REMAINING", (win_w - 272, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 2, cv2.LINE_AA)
 
-        # Render Telemetry Metrics (3 boxes)
-        col_w = 220
-        # Metric 1: Vibration RMS
-        cv2.rectangle(canvas, (20, 80), (20 + col_w, 150), (30, 41, 59), -1)
-        cv2.putText(canvas, "Vibration RMS (Piezo)", (30, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (148, 163, 184), 1)
+        # Render Telemetry Cards (2 columns)
+        card_w = 345
+        # Card 1: Piezo Vibration RMS
+        cv2.rectangle(canvas, (20, 75), (20 + card_w, 145), (30, 41, 59), -1)
+        cv2.putText(canvas, "Acoustic Vibration RMS", (35, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (148, 163, 184), 1)
         val_str1 = f"{rms:.3f} g" if not hw_disconnected else "0.000 g (NO SIGNAL)"
-        cv2.putText(canvas, val_str1, (30, 132), cv2.FONT_HERSHEY_SIMPLEX, 0.7 if hw_disconnected else 0.85, (239, 68, 68) if hw_disconnected or rms >= 0.40 else (34, 197, 94), 2)
+        cv2.putText(canvas, val_str1, (35, 128), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (239, 68, 68) if hw_disconnected or rms >= 0.40 else (34, 197, 94), 2)
         
-        # Metric 2: Peak Impact Accel
-        cv2.rectangle(canvas, (260, 80), (260 + col_w, 150), (30, 41, 59), -1)
-        cv2.putText(canvas, "Accel Impact (IMU Z)", (270, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (148, 163, 184), 1)
-        val_str2 = f"{accel_z:.2f} g" if not hw_disconnected else "0.00 g (NO SIGNAL)"
-        cv2.putText(canvas, val_str2, (270, 132), cv2.FONT_HERSHEY_SIMPLEX, 0.7 if hw_disconnected else 0.85, (239, 68, 68) if hw_disconnected else (59, 130, 246), 2)
+        # Card 2: Instantaneous Acoustic Signal (V)
+        cv2.rectangle(canvas, (415, 75), (415 + card_w, 145), (30, 41, 59), -1)
+        cv2.putText(canvas, "Live Piezo Signal (A0 Voltage)", (430, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (148, 163, 184), 1)
+        val_str2 = f"{piezo_raw:.3f} V" if not hw_disconnected else "0.000 V (NO SIGNAL)"
+        cv2.putText(canvas, val_str2, (430, 128), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (239, 68, 68) if hw_disconnected else (56, 189, 248), 2)
 
-        # Metric 3: Gyro Speed
-        cv2.rectangle(canvas, (500, 80), (500 + col_w, 150), (30, 41, 59), -1)
-        cv2.putText(canvas, "Angular Velocity (Gyro)", (510, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (148, 163, 184), 1)
-        val_str3 = f"{gyro_mag:.1f} deg/s" if not hw_disconnected else "0.0 deg/s (OFF)"
-        cv2.putText(canvas, val_str3, (510, 132), cv2.FONT_HERSHEY_SIMPLEX, 0.7 if hw_disconnected else 0.85, (239, 68, 68) if hw_disconnected else (168, 85, 247), 2)
-
-        # Render Live Telemetry Graph Box
-        graph_x, graph_y, graph_w, graph_h = 20, 180, 710, 240
+        # Render Live Telemetry Graph Box (Cyan/Blue Plotter style)
+        graph_x, graph_y, graph_w, graph_h = 20, 165, 740, 280
         cv2.rectangle(canvas, (graph_x, graph_y), (graph_x + graph_w, graph_y + graph_h), (30, 41, 59), -1)
-        cv2.putText(canvas, "Live Real-Time Acoustic & Inertial Signal Stream", (graph_x + 15, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(canvas, "Piezo Disc Live Acoustic Waveform (A0 Volts)", (graph_x + 15, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
-        # Draw legend
-        cv2.rectangle(canvas, (graph_x + 380, graph_y + 10), (graph_x + 480, graph_y + 28), (249, 115, 22), -1)
-        cv2.putText(canvas, "Acoustic (Piezo)", (graph_x + 390, graph_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
-        
-        cv2.rectangle(canvas, (graph_x + 490, graph_y + 10), (graph_x + 580, graph_y + 28), (59, 130, 246), -1)
-        cv2.putText(canvas, "IMU Accel", (graph_x + 500, graph_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
-
-        cv2.rectangle(canvas, (graph_x + 590, graph_y + 10), (graph_x + 690, graph_y + 28), (168, 85, 247), -1)
-        cv2.putText(canvas, "Gyro Speed", (graph_x + 600, graph_y + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
+        # Draw legend / value marker
+        if not hw_disconnected:
+            cv2.rectangle(canvas, (graph_x + graph_w - 180, graph_y + 10), (graph_x + graph_w - 15, graph_y + 32), (56, 189, 248), -1)
+            cv2.putText(canvas, f"Signal: {piezo_raw:.3f} V", (graph_x + graph_w - 170, graph_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (15, 23, 42), 2)
 
         if hw_disconnected:
             # Render FLAT LINE + BIG WARNING OVERLAY ON GRAPH
-            zero_y = graph_y + graph_h - 20
-            cv2.line(canvas, (graph_x + 15, zero_y), (graph_x + graph_w - 15, zero_y), (100, 116, 139), 2) # Flat gray line
+            zero_y = graph_y + graph_h - 30
+            cv2.line(canvas, (graph_x + 15, zero_y), (graph_x + graph_w - 15, zero_y), (100, 116, 139), 2)
             
-            # Big Red Banner inside graph box
-            cv2.rectangle(canvas, (graph_x + 80, graph_y + 80), (graph_x + graph_w - 80, graph_y + 160), (127, 29, 29), -1)
-            cv2.rectangle(canvas, (graph_x + 80, graph_y + 80), (graph_x + graph_w - 80, graph_y + 160), (239, 68, 68), 2)
-            cv2.putText(canvas, "NO USB HARDWARE DETECTED!", (graph_x + 160, graph_y + 115), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-            cv2.putText(canvas, "Connect Joint Band or switch to SIMULATED mode", (graph_x + 130, graph_y + 142), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (254, 202, 202), 1)
+            cv2.rectangle(canvas, (graph_x + 90, graph_y + 90), (graph_x + graph_w - 90, graph_y + 180), (127, 29, 29), -1)
+            cv2.rectangle(canvas, (graph_x + 90, graph_y + 90), (graph_x + graph_w - 90, graph_y + 180), (239, 68, 68), 2)
+            cv2.putText(canvas, "NO USB HARDWARE DETECTED!", (graph_x + 170, graph_y + 130), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+            cv2.putText(canvas, "Connect Joint Band or switch to SIMULATED mode", (graph_x + 140, graph_y + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (254, 202, 202), 1)
         else:
-            # Plot waveform lines
+            # Plot waveform lines (Cyan/Blue matching Arduino Serial Plotter!)
             if len(piezo_buffer) > 1:
-                p_pts, a_pts, g_pts = [], [], []
+                p_pts = []
+                min_v = max(0.0, min(piezo_buffer) - 0.2)
+                max_v = max(5.0, max(piezo_buffer) + 0.2)
+                range_v = max(0.5, max_v - min_v)
+
                 for i in range(len(piezo_buffer)):
-                    px = graph_x + 15 + int((i / max_buf) * (graph_w - 30))
-                    
-                    py = graph_y + graph_h - 20 - int(min(1.0, piezo_buffer[i]) * (graph_h - 50))
+                    px = graph_x + 20 + int((i / max_buf) * (graph_w - 40))
+                    # Map voltage to graph height
+                    norm_y = (piezo_buffer[i] - min_v) / range_v
+                    py = graph_y + graph_h - 25 - int(norm_y * (graph_h - 60))
+                    py = max(graph_y + 35, min(graph_y + graph_h - 15, py))
                     p_pts.append((px, py))
-                    
-                    ay = graph_y + graph_h - 20 - int(min(2.0, accel_buffer[i]) / 2.0 * (graph_h - 50))
-                    a_pts.append((px, ay))
 
-                    gy = graph_y + graph_h - 20 - int(min(120.0, gyro_buffer[i]) / 120.0 * (graph_h - 50))
-                    g_pts.append((px, gy))
-
-                cv2.polylines(canvas, [np.array(p_pts)], False, (22, 115, 249), 2) # Orange
-                cv2.polylines(canvas, [np.array(a_pts)], False, (246, 130, 59), 2) # Blue
-                cv2.polylines(canvas, [np.array(g_pts)], False, (247, 85, 168), 2) # Purple
+                # Draw cyan line
+                cv2.polylines(canvas, [np.array(p_pts)], False, (248, 189, 56), 2, cv2.LINE_AA) # BGR for Cyan (#38bdf8)
 
         # Footer Instruction Bar
         cv2.rectangle(canvas, (0, win_h - 35), (win_w, win_h), (30, 41, 59), -1)
@@ -226,7 +199,7 @@ def run_sensor_recorder():
                 recording = True
                 start_time = time.time()
                 recorded_rows = []
-                print("🔴 Recording Started! Collecting 15s sensor stream...")
+                print("🔴 Recording Started! Collecting 15s Piezo acoustic stream...")
         elif key == ord('q') or key == ord('Q') or key == 27: # ESC
             print("User exited sensor recorder.")
             break

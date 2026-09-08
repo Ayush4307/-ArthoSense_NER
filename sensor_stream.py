@@ -108,15 +108,17 @@ class SensorStreamManager:
                     if len(self.vibration_buffer) > self.max_buffer_len:
                         self.vibration_buffer.pop(0)
                         
-                    rms = float(np.sqrt(np.mean(np.square(self.vibration_buffer)))) if self.vibration_buffer else 0.0
+                    buf_arr = np.array(self.vibration_buffer)
+                    dc_offset = np.mean(buf_arr) if len(buf_arr) > 0 else piezo
+                    ac_signal = buf_arr - dc_offset
+                    rms = float(np.sqrt(np.mean(np.square(ac_signal)))) if len(ac_signal) > 0 else 0.0
+
                     return {
                         "mode": "Physical Serial (Piezo Contact Stethoscope)",
-                        "accel": {"x": ax, "y": ay, "z": az},
-                        "gyro": {"x": gx, "y": gy, "z": gz},
                         "piezo_raw": round(piezo, 3),
                         "vibration_rms": round(rms, 3),
                         "dominant_freq_hz": round(abs(rms * 180.0) % 350 + 40, 1),
-                        "crepitus_detected": rms > 0.40
+                        "crepitus_detected": rms > 0.35 or abs(piezo - dc_offset) > 0.60
                     }
             except Exception:
                 pass # Fallback to simulator

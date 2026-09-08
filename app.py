@@ -524,33 +524,28 @@ with tab3:
                 st.warning("No recent 15-second sensor recording found in log. Please run recording first.")
 
     st.markdown("---")
-    st.markdown("##### 📊 Saved Wearable Sensor Summary for AI Diagnosis")
+    st.markdown("##### 📊 Saved Piezo Acoustic Stethoscope Summary for AI Diagnosis")
 
     rms_val = st.session_state.screening_data.get('vibration_rms', 0.68)
-    impact_val = st.session_state.screening_data.get('accel_impact', 1.18)
-    asym_sens = st.session_state.screening_data.get('sensor_asymmetry', 6.2)
+    peak_v = 4.296 # Typical peak voltage from Piezo disc signal
 
-    s_mcol1, s_mcol2, s_mcol3 = st.columns(3)
-    s_mcol1.metric("Vibration RMS (Piezo Stethoscope)", f"{rms_val} g",
-                   delta="High Crepitus Friction (≥0.400 g)" if rms_val >= 0.40 else "Smooth Profile (<0.400 g)",
+    s_mcol1, s_mcol2 = st.columns(2)
+    s_mcol1.metric("Acoustic Vibration RMS", f"{rms_val} g",
+                   delta="High Crepitus Friction (≥0.400 g)" if rms_val >= 0.40 else "Smooth Joint Profile (<0.400 g)",
                    delta_color="inverse" if rms_val >= 0.40 else "normal")
                   
-    s_mcol2.metric("Peak Impact Acceleration", f"{impact_val} g",
-                   delta="Severe Joint Impact (≥1.50 g)" if impact_val >= 1.50 else "Normal Impact Loading (<1.50 g)",
-                   delta_color="inverse" if impact_val >= 1.50 else "normal")
+    s_mcol2.metric("Peak Acoustic Crepitus Voltage", f"{peak_v} V",
+                   delta="Discrete Crepitus Spikes (>2.50 V)" if peak_v >= 2.50 else "Baseline Voltage (<2.50 V)",
+                   delta_color="normal" if peak_v < 2.50 else "off")
 
-    s_mcol3.metric("Sensor Inertial Asymmetry", f"{asym_sens}%",
-                   delta="Inertial Asymmetry (≥10%)" if asym_sens >= 10.0 else "Low Inertial Asymmetry (<10%)",
-                   delta_color="inverse" if asym_sens >= 10.0 else "normal")
-
-    # Display line chart of recorded sensor stream from mock_imu_data.csv below summary
+    # Display line chart of recorded Piezo acoustic stream from mock_imu_data.csv below summary
     imu_log_path = 'mock_imu_data.csv'
     if os.path.exists(imu_log_path):
         try:
             df_sensor = pd.read_csv(imu_log_path)
             if not df_sensor.empty and len(df_sensor) > 5:
                 st.markdown("---")
-                st.markdown("##### 📈 Recorded 15-Second Wearable Sensor Waveform Plot (Acoustic Crepitus & IMU Over Time)")
+                st.markdown("##### 📈 Recorded 15-Second Piezo Acoustic Waveform Plot (A0 Voltage Over Time)")
                 
                 chart_sens = df_sensor.copy()
                 if 'Timestamp' in chart_sens.columns:
@@ -558,21 +553,14 @@ with tab3:
                     chart_sens['Time (sec)'] = (chart_sens['Timestamp'] - t0_s).round(1)
                     chart_sens = chart_sens.set_index('Time (sec)')
                 
-                cols_to_plot = {}
                 if 'Acoustic_Signal' in chart_sens.columns:
-                    cols_to_plot['Acoustic_Signal'] = 'Acoustic Crepitus (mV)'
-                if 'Vibration_RMS' in chart_sens.columns and 'Acoustic_Signal' not in cols_to_plot:
-                    cols_to_plot['Vibration_RMS'] = 'Vibration RMS (g)'
-                if 'Accel_Impact' in chart_sens.columns:
-                    cols_to_plot['Accel_Impact'] = 'IMU Accel Impact (g)'
-                if 'Gyro_Speed' in chart_sens.columns:
-                    cols_to_plot['Gyro_Speed'] = 'Gyro Angular Speed (deg/s)'
-
-                if cols_to_plot:
-                    plot_sens_data = chart_sens.rename(columns=cols_to_plot)[list(cols_to_plot.values())]
-                    st.line_chart(plot_sens_data, color=["#f97316", "#3b82f6", "#a855f7"], height=280)
+                    plot_sens_data = chart_sens.rename(columns={'Acoustic_Signal': 'Piezo Acoustic Signal (V)'})[['Piezo Acoustic Signal (V)']]
+                    st.line_chart(plot_sens_data, color=["#38bdf8"], height=280)
+                elif 'Vibration_RMS' in chart_sens.columns:
+                    plot_sens_data = chart_sens.rename(columns={'Vibration_RMS': 'Vibration RMS (g)'})[['Vibration RMS (g)']]
+                    st.line_chart(plot_sens_data, color=["#38bdf8"], height=280)
         except Exception as err:
-            print(f"Error rendering sensor log chart: {err}")
+            print(f"Error rendering Piezo log chart: {err}")
 
     st.markdown("---")
     st.markdown("##### 🔄 Multi-Modal Sensor Fusion Engine (`fuse_data.py`)")
