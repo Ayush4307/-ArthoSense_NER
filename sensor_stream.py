@@ -108,34 +108,41 @@ class SensorStreamManager:
                     if len(self.vibration_buffer) > self.max_buffer_len:
                         self.vibration_buffer.pop(0)
                         
+                    # Noise Gate Deadband Filter (Lock to 2.350V flat baseline at rest)
+                    baseline_v = 2.350
+                    noise_thresh = 0.035
+                    if abs(piezo - baseline_v) < noise_thresh:
+                        piezo_clean = baseline_v
+                    else:
+                        piezo_clean = piezo
+
                     buf_arr = np.array(self.vibration_buffer)
-                    dc_offset = np.mean(buf_arr) if len(buf_arr) > 0 else piezo
+                    dc_offset = np.mean(buf_arr) if len(buf_arr) > 0 else baseline_v
                     ac_signal = buf_arr - dc_offset
                     rms = float(np.sqrt(np.mean(np.square(ac_signal)))) if len(ac_signal) > 0 else 0.0
 
                     return {
                         "mode": "Physical Serial (Piezo Contact Stethoscope)",
-                        "piezo_raw": round(piezo, 3),
+                        "piezo_raw": round(piezo_clean, 3),
                         "vibration_rms": round(rms, 3),
                         "dominant_freq_hz": round(abs(rms * 180.0) % 350 + 40, 1),
-                        "crepitus_detected": rms > 0.35 or abs(piezo - dc_offset) > 0.60
+                        "crepitus_detected": rms > 0.35 or abs(piezo_clean - baseline_v) > 0.40
                     }
             except Exception:
                 pass # Fallback to simulator
 
-        # Synthesizer generation based on joint condition (Calibrated to 2.35V baseline)
+        # Synthesizer generation based on joint condition (Noise Gate Active)
         t = self.sample_idx * 0.1
-        dc_base = 2.35
+        dc_base = 2.350
         if joint_condition == "healthy":
-            # Stable resting baseline (2.31V - 2.39V)
-            ripple = np.random.normal(0, 0.025)
-            piezo_val = round(dc_base + math.sin(t * 0.5) * 0.02 + ripple, 3)
+            # 100% Solid Flat Baseline at Rest (No vibration)
+            piezo_val = dc_base
             dom_freq = 45.0
-            rms = round(float(abs(ripple) + 0.015), 3)
+            rms = 0.012
             crepitus = False
         elif joint_condition == "mild":
             spike = 0.35 if (self.sample_idx % 25 in [0, 1]) else 0.0
-            piezo_val = round(dc_base + math.sin(t) * 0.12 + np.random.normal(0, 0.06) + spike, 3)
+            piezo_val = round(dc_base + (math.sin(t) * 0.12 if spike > 0 else 0.0) + spike, 3)
             dom_freq = 120.0
             rms = 0.24
             crepitus = spike > 0
