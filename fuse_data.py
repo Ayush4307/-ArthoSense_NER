@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='recorded_sensor_data.csv', output_csv='master_patient_data.csv'):
+def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='recorded_sensor_data.csv', output_csv='master_patient_data.csv', tolerance_seconds=0.2):
     print("\n" + "="*50)
     print(" SENSOR FUSION ENGINE STARTING")
     print("="*50)
@@ -33,7 +33,7 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='recorded_sensor_
     imu_df['Relative_Time'] = (imu_df['Timestamp'] - imu_t0).round(2)
 
     # 4. Synchronization Engine: Merge on Relative Elapsed Time
-    print("Synchronizing 15-second motion window across vision & wearable modalities...")
+    print(f"Synchronizing 15-second motion window across vision & wearable modalities (tolerance: {tolerance_seconds:.2f}s)...")
     
     # Drop raw timestamp columns before merge to avoid confusion, keeping Relative_Time
     imu_df_to_merge = imu_df.drop(columns=['Timestamp'], errors='ignore')
@@ -43,7 +43,7 @@ def fuse_sensor_data(camera_csv='knee_angles_log.csv', imu_csv='recorded_sensor_
         imu_df_to_merge, 
         on='Relative_Time', 
         direction='nearest', 
-        tolerance=1.5 # 1.5 seconds relative window tolerance
+        tolerance=tolerance_seconds
     )
 
     # Clean data (drop any un-synced NaNs)
