@@ -270,9 +270,9 @@ def load_latest_cv_log():
             print(f"Error reading CSV log: {e}")
     return False
 
-# Helper to load mock_imu_data.csv into session state
+# Helper to load recorded_sensor_data.csv into session state
 def load_latest_sensor_log():
-    log_path = 'mock_imu_data.csv'
+    log_path = 'recorded_sensor_data.csv'
     if os.path.exists(log_path):
         try:
             df = pd.read_csv(log_path)
@@ -552,8 +552,8 @@ with tab3:
                    delta="Discrete Crepitus Spikes (>2.50 V)" if peak_v >= 2.50 else "Baseline Voltage (<2.50 V)",
                    delta_color="normal" if peak_v < 2.50 else "off")
 
-    # Display line chart of recorded Piezo acoustic stream from mock_imu_data.csv below summary
-    imu_log_path = 'mock_imu_data.csv'
+    # Display line chart of recorded Piezo acoustic stream from recorded_sensor_data.csv below summary
+    imu_log_path = 'recorded_sensor_data.csv'
     if os.path.exists(imu_log_path):
         try:
             df_sensor = pd.read_csv(imu_log_path)
@@ -578,7 +578,7 @@ with tab3:
 
     st.markdown("---")
     st.markdown("##### 🔄 Multi-Modal Sensor Fusion Engine (`fuse_data.py`)")
-    st.markdown("Synchronizes millisecond-accurate vision kinematics (`knee_angles_log.csv`) with IMU/acoustic logs (`mock_imu_data.csv`).")
+    st.markdown("Synchronizes millisecond-accurate vision kinematics (`knee_angles_log.csv`) with hardware acoustic logs (`recorded_sensor_data.csv`).")
     if st.button("🔗 Run Multi-Modal Sensor Fusion", type="primary"):
         fused_df = fuse_sensor_data()
         if fused_df is not None:

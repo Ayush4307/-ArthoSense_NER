@@ -46,7 +46,7 @@ def run_sensor_recorder():
     win_w, win_h = 780, 500
     bg_color = (15, 23, 42) # Slate dark #0f172a
     
-    csv_file = "mock_imu_data.csv"
+    csv_file = "recorded_sensor_data.csv"
     
     recording = False
     start_time = None
