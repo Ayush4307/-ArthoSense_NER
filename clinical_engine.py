@@ -230,8 +230,9 @@ class SupervisedMLClassifier:
         vibs = np.random.uniform(0.05, 0.9, n_samples)
         occupations = np.random.choice([0, 1], n_samples, p=[0.4, 0.6])
         
-        # Synthetic ground truth
-        logits = (ages * 0.05) + (bmis * 0.1) + (pains * 0.3) - (roms * 0.04) + (vibs * 3.5) + (occupations * 1.2) - 8.0
+        # Synthetic ground truth calibrated to clinical risk prevalence
+        rom_restriction = np.maximum(0, 110.0 - roms)
+        logits = (ages * 0.03) + ((bmis - 22.0) * 0.05) + (pains * 0.18) + (rom_restriction * 0.025) + (vibs * 2.2) + (occupations * 0.5) - 3.4
         probs = 1 / (1 + np.exp(-logits))
         labels = (probs > 0.5).astype(int)
 
