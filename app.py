@@ -461,8 +461,8 @@ with tab2:
 # TAB 3: MULTIMODAL WEARABLE SENSORS (DEDICATED SENSORS SECTION)
 # ==============================================================================
 with tab3:
-    st.subheader("📡 Multimodal Perception: Wearable Sensor Stack (IMU + Piezo Stethoscope)")
-    st.markdown("<div style='background-color:#1e293b; border-left:5px solid #f59e0b; padding:10px 15px; border-radius:6px; margin-bottom:15px;'><span style='color:#fbbf24; font-weight:bold; font-size:0.95rem;'>🎯 Modality 3 Standalone Accuracy: <b>88.6%</b></span> <span style='color:#cbd5e1; font-size:0.85rem;'>(RMS Sensitivity: 87.5%, Specificity: 89.4% | MPU6050 IMU + Contact Piezo Sensor on Breadboard)</span></div>", unsafe_allow_html=True)
+    st.subheader("📡 Multimodal Perception: Contact Piezo Sensor on Breadboard")
+    st.markdown("<div style='background-color:#1e293b; border-left:5px solid #f59e0b; padding:10px 15px; border-radius:6px; margin-bottom:15px;'><span style='color:#fbbf24; font-weight:bold; font-size:0.95rem;'>🎯 Modality 3 Standalone Accuracy: <b>88.6%</b></span> <span style='color:#cbd5e1; font-size:0.85rem;'>(RMS Sensitivity: 87.5%, Specificity: 89.4% | Contact Piezo Sensor on Breadboard)</span></div>", unsafe_allow_html=True)
     
     col_sens1, col_sens2 = st.columns([2, 1])
     with col_sens1:
@@ -470,7 +470,7 @@ with tab3:
             "🔌 Select Sensor Hardware Port",
             [
                 "SIMULATED: Calibrated Wearable Hardware Simulator",
-                "PHYSICAL: COM3 Physical MPU6050 + Piezo Stethoscope"
+                "PHYSICAL: COM3 Physical Contact Piezo Sensor (Breadboard)"
             ],
             index=0,
             horizontal=True
@@ -511,7 +511,7 @@ with tab3:
         <h4>📋 Instructions for Wearable Sensor Screening Workflow:</h4>
         <ol>
             <li>Click <strong><code>📡 OPEN SENSOR MONITOR & RECORDING</code></strong> below.</li>
-            <li>The telemetry window will launch in <strong>Standby Alignment Mode</strong>. Ensure IMU & Acoustic Piezo straps are snugly fitted around the knee joint.</li>
+            <li>The telemetry window will launch in <strong>Standby Alignment Mode</strong>. Ensure the Contact Piezo disc is firmly placed against the knee joint on the breadboard setup.</li>
             <li>When ready, press the <strong><code>R</code></strong> key on your keyboard to start recording 15 seconds of sensor data.</li>
             <li>Perform knee flexion squats. The recorder will <strong>AUTOMATICALLY CLOSE</strong> when 15 seconds are complete!</li>
         </ol>
@@ -598,7 +598,7 @@ with tab4:
     acc_c1, acc_c2, acc_c3, acc_c4 = st.columns(4)
     acc_c1.metric("Modality 1: Questionnaire", "78.4%", "Assam Risk Engine")
     acc_c2.metric("Modality 2: Vision Kinematics", "84.2%", "MediaPipe Pose ±2.8°")
-    acc_c3.metric("Modality 3: Acoustic Piezo", "88.6%", "IMU + Piezo Breadboard RMS")
+    acc_c3.metric("Modality 3: Acoustic Piezo", "88.6%", "Contact Piezo Breadboard RMS")
     acc_c4.metric("🔥 Combined Tri-Modal Accuracy", "89.0%", "ROC-AUC: 0.932", delta_color="normal")
     st.markdown("---")
     
@@ -860,8 +860,8 @@ with tab7:
     with col_hw2:
         st.markdown("##### Physical Sensor Wiring Reference")
         st.markdown("""
-        - **MPU6050 6-DOF IMU**: VCC (3.3V/5V), GND, SDA (A4/ESP32 GPIO 21), SCL (A5/ESP32 GPIO 22)
-        - **Piezo Contact Acoustic Sensor**: Signal (A0 Analog In with 1MΩ parallel resistor), GND
-        - **Sampling Rate**: 100 Hz Serial stream transmitting `ax,ay,az,gx,gy,gz,piezo_val`
-        - **Cost**: Total wearable hardware BOM < $5.00
+        - **Contact Piezo Acoustic Sensor**: Signal (A0 Analog In with 1MΩ parallel resistor), GND
+        - **Hardware Setup**: Standalone Contact Piezo Disc connected on Breadboard to Arduino / ESP32 ADC Pin A0
+        - **Sampling Rate**: 100 Hz Serial stream transmitting analog voltage signal `v(t)`
+        - **Cost**: Ultra-low-cost setup (< ₹50 / < $1.00)
         """)

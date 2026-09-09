@@ -49,7 +49,7 @@ TRANSLATIONS = {
         
         # Multimodal
         "vision_module": "Computer Vision Kinematics (Webcam + MediaPipe)",
-        "sensor_module": "Wearable Sensor Stream (MPU6050 IMU + Piezo Acoustic Mic)",
+        "sensor_module": "Contact Piezo Sensor on Breadboard",
         "rom_angle": "Knee Range of Motion (ROM Flexion Angle)",
         "vibration_rms": "Acoustic Crepitus RMS Vibration",
         "sensor_status": "Sensor Status",
@@ -123,7 +123,7 @@ TRANSLATIONS = {
         
         # Multimodal
         "vision_module": "কম্পিউটাৰ ভিজন (ৱেবকেম + মিডিয়া পাইপ)",
-        "sensor_module": "ৱেৰেবল চেন্সৰ (MPU6050 IMU + পিজো মাইক্ৰ'ফোন)",
+        "sensor_module": "ব্ৰেডবৰ্ড পিজো চেন্সৰ (Contact Piezo Sensor)",
         "rom_angle": "আঁঠু ভাঁজ কৰাৰ কোণ (Range of Motion)",
         "vibration_rms": "আঁঠুৰ কম্পনৰ মাত্ৰা (RMS Vibration)",
         "sensor_status": "চেন্সৰ অৱস্থা",
@@ -332,7 +332,7 @@ TRANSLATIONS = {
         "crepitus_q": "घुटने को मोड़ने या चलने पर कट-कट या घिसने की आवाज (Crepitus) आती है?",
         
         "vision_module": "कंप्यूटर विजन किनेमैटिक्स (वेबकैम + मीडियापाइप)",
-        "sensor_module": "वियरेबल सेंसर (MPU6050 IMU + पीजो माइक्रोफोन)",
+        "sensor_module": "ब्रेडबोर्ड पीजो सेंसर (Contact Piezo Sensor)",
         "rom_angle": "घुटने के मुड़ने का कोण (Range of Motion)",
         "vibration_rms": "घुटने के कंपन का स्तर (RMS Vibration)",
         "sensor_status": "सेंसर की स्थिति",
