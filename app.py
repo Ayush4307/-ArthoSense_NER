@@ -462,7 +462,7 @@ with tab2:
 # ==============================================================================
 with tab3:
     st.subheader("📡 Multimodal Perception: Wearable Sensor Stack (IMU + Piezo Stethoscope)")
-    st.markdown("<div style='background-color:#1e293b; border-left:5px solid #f59e0b; padding:10px 15px; border-radius:6px; margin-bottom:15px;'><span style='color:#fbbf24; font-weight:bold; font-size:0.95rem;'>🎯 Modality 3 Standalone Accuracy: <b>88.6%</b></span> <span style='color:#cbd5e1; font-size:0.85rem;'>(RMS Sensitivity: 87.5%, Specificity: 89.4% | Contact Piezo Disc Ceramic Acoustic Stethoscope)</span></div>", unsafe_allow_html=True)
+    st.markdown("<div style='background-color:#1e293b; border-left:5px solid #f59e0b; padding:10px 15px; border-radius:6px; margin-bottom:15px;'><span style='color:#fbbf24; font-weight:bold; font-size:0.95rem;'>🎯 Modality 3 Standalone Accuracy: <b>88.6%</b></span> <span style='color:#cbd5e1; font-size:0.85rem;'>(RMS Sensitivity: 87.5%, Specificity: 89.4% | MPU6050 IMU + Contact Piezo Sensor on Breadboard)</span></div>", unsafe_allow_html=True)
     
     col_sens1, col_sens2 = st.columns([2, 1])
     with col_sens1:
@@ -598,7 +598,7 @@ with tab4:
     acc_c1, acc_c2, acc_c3, acc_c4 = st.columns(4)
     acc_c1.metric("Modality 1: Questionnaire", "78.4%", "Assam Risk Engine")
     acc_c2.metric("Modality 2: Vision Kinematics", "84.2%", "MediaPipe Pose ±2.8°")
-    acc_c3.metric("Modality 3: Acoustic Piezo", "88.6%", "A0 Stethoscope RMS")
+    acc_c3.metric("Modality 3: Acoustic Piezo", "88.6%", "IMU + Piezo Breadboard RMS")
     acc_c4.metric("🔥 Combined Tri-Modal Accuracy", "95.0%", "ROC-AUC: 0.965", delta_color="normal")
     st.markdown("---")
     
