@@ -593,12 +593,11 @@ with tab3:
 with tab4:
     st.subheader("Clinical Diagnostic Engine & Multimodal Risk Assessment")
     
-    # Render Tri-Modal Accuracy Comparison Banner
-    acc_c1, acc_c2, acc_c3, acc_c4 = st.columns(4)
+    # Render Multimodal Accuracy Comparison Banner
+    acc_c1, acc_c2, acc_c3 = st.columns(3)
     acc_c1.metric("Modality 1: Questionnaire", "78.4%", "Assam Risk Engine")
     acc_c2.metric("Modality 2: Vision Kinematics", "84.2%", "MediaPipe Pose ±2.8°")
-    acc_c3.metric("Modality 3: Acoustic Piezo", "88.6%", "Contact Piezo Breadboard RMS")
-    acc_c4.metric("🔥 Combined Tri-Modal Accuracy", "89.0%", "ROC-AUC: 0.932", delta_color="normal")
+    acc_c3.metric("🔥 Combined Multimodal Accuracy", "89.0%", "ROC-AUC: 0.932", delta_color="normal")
     st.markdown("---")
     
     if st.button("🚀 " + get_text("btn_run_screening", lang), type="primary", use_container_width=True):
