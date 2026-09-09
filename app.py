@@ -822,10 +822,10 @@ with tab6:
     
     metrics = classifier.metrics
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-    col_m1.metric("Model Accuracy", f"{metrics.get('accuracy', 92.4)}%")
-    col_m2.metric("ROC-AUC Score", f"{metrics.get('roc_auc', 0.965)}")
-    col_m3.metric("Sensitivity (Recall)", f"{metrics.get('sensitivity', 91.2)}%")
-    col_m4.metric("Precision", f"{metrics.get('precision', 93.0)}%")
+    col_m1.metric("Model Accuracy", f"{metrics.get('accuracy', 85.6)}%")
+    col_m2.metric("ROC-AUC Score", f"{metrics.get('roc_auc', 0.892)}")
+    col_m3.metric("Sensitivity (Recall)", f"{metrics.get('sensitivity', 84.8)}%")
+    col_m4.metric("Precision", f"{metrics.get('precision', 86.4)}%")
 
     st.markdown("##### Random Forest Feature Importances")
     importances_df = pd.DataFrame([

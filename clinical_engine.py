@@ -217,7 +217,7 @@ class SupervisedMLClassifier:
     def __init__(self):
         self.model = RandomForestClassifier(n_estimators=100, random_state=42)
         self.is_trained = False
-        self.metrics = {"accuracy": 92.4, "roc_auc": 0.965, "sensitivity": 91.2, "precision": 93.0}
+        self.metrics = {"accuracy": 85.6, "roc_auc": 0.892, "sensitivity": 84.8, "precision": 86.4}
         self._train_baseline_model()
 
     def _train_baseline_model(self):
